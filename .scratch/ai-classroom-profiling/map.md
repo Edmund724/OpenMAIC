@@ -13,7 +13,7 @@ Status: active
 - 核心痛点（用户原话的提炼）：OpenMAIC 画像太浅（学历+兴趣、单轴难度 tier）；问答数据完全不进画像；个性化停留在 Token 级改写，课堂无本质优化。
 - 关键参照：`reports/maic-interaction-collection-and-profiling.md`（OpenMAIC 调研报告，论文↔代码对照已完成）、`MAIC.md`（原论文）、本仓库源代码（事实核查用）。
 - 已在 charting 确认的决策：L2 内容级自适应为主目标、L1 对话级为地基顺带覆盖、L3 路径级写远期、L4 排除；知识图谱做到概念级；有人类教师（课件教师上传）但教师端非本报告重点。
-- 术语约定：「画像」= 多维、随学习演进的学生模型（区别于 OpenMAIC 单轴"熟练度 tier"）；L1 对话级 / L2 内容级 / L3 路径级自适应；「闭环」= 采集 → 画像 → 课堂改变 → 效果评估 → 回调采集与策略。
+- 术语约定：「画像」= 多维、随学习演进的学生模型（区别于 OpenMAIC 单轴"熟练度 tier"）；L1 对话级 / L2 内容级 / L3 路径级自适应；「闭环」= 采集 → 画像 → 课堂改变 → 效果评估 → 回调采集与策略；「事件信封」= 全部采集事件共用的统一字段头（T1）；「派生层」= 从原始事件可重算的指标/标签，不在采集时锁死（T1）。
 - 工作方式：核心决策逐轮 grilling 拍板（grilling 票会话开场调 Skill: grilling + domain-modeling）；事实调研走 research 子代理（research 票调 Skill: research）。
 - 本 effort 携带执行：终点票 T7 实际撰写报告（"做"仅限报告本身，不写产品代码）。
 
@@ -24,6 +24,7 @@ Status: active
 - [R1：MAIC 论文画像与个性化机制精读](issues/01-maic-paper-profiling-deep-read.md): 论文画像管线很浅——对话采集 agent 收专业/年级+兴趣，summarization 出 Domain/Category 标签，仅供 token 级改写；10 万+行为记录无字段定义；MsgNum/MsgLen 与成绩正相关；个性化效果无对照实证。细节见 research/01-maic-paper-profiling.md
 - [R2：对话式学生建模的学术机制调研](issues/02-dialogue-student-modeling-research.md): 对话建画像三层机制——静态身份标签（对话采集+重提炼）、行为构成（dialogue act 分类，facilitative 提问提升学习率、直接给答案为负）、状态估计（LLM 从对话原文出逐知识点 mastery、6 认知状态→策略查表）；最有预测力信号轴是"概念性 vs 任务特异性提问"。细节见 research/02-dialogue-student-modeling.md
 - [R3：视频与在线学习行为采集实践调研](issues/03-video-behavior-collection-research.md): xAPI Video Profile 与 Caliper MediaEvent 是埋点事实标准；首看/重看须分开解释；停留时长须细粒度+可见性过滤；改答案首次净收益为正；MOOC 预测共识特征族=每周活跃天数、视频完成率、提交及时性、CFA；附最小有用采集集共识。细节见 research/03-video-behavior-collection.md
+- [T1：交互采集清单与事件模型](issues/04-interaction-collection-event-model.md): 统一事件信封（学习者/会话/时间戳/资源定位/类型/载荷）；问答存全量原文+课件上下文（标签为派生层）；视频采 xAPI 子集；课件采页级翻页+可见停留；测验采逐题用时+修改轨迹；时长/活跃天数/完成率全部派生；不采鼠标级行为；账号制，教师只见聚合层
 
 ## Not yet specified
 
