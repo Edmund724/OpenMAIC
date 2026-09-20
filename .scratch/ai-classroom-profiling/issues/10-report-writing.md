@@ -1,0 +1,11 @@
+# T7：报告大纲确认与撰写
+
+Type: task
+Status: open
+Blocked by: 09
+
+## Question
+
+汇总全部已解决决策（见 map 的 Decisions so far 与各票 Answer），先产出报告大纲供用户确认（章节、每章要点、OpenMAIC 对照落点、MVP/远期分层），确认后撰写最终报告。
+
+报告要求（用户已定）：中文；纯文字不提代码；设计蓝图式——以用户产品为主体，OpenMAIC 与论文为论据，相关章节附 OpenMAIC 对照；主线为采集 → 画像 → L2 闭环；MVP 与远期（L3、教师端、情感维度等按 T2/T5/T6 结论）分层。产出路径在确认大纲时一并定。
