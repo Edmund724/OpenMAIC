@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>速查：数据源 B/C/D 采集机制</title>
+<link rel="stylesheet" href="../assets/teach/base.css">
+</head>
+<body>
+<div class="page">
+  <div class="lesson-kicker">Reference · 速查表</div>
+  <h1>数据源 B/C/D：采集机制</h1>
+  <div class="lesson-meta">核实于 2026-09-20（当前 main） · 配套课程：<a href="../lessons/0002-collection-mechanism-bcd.html">0002</a> · 事件账本见 <a href="pbl-engagement-events.html">A 账本速查</a></div>
+
+  <h2><span class="sec-no">§</span>B：StatelessChatRequest（<span class="file-ref">lib/types/chat.ts:330-406</span>）</h2>
+  <table>
+    <tr><th>字段</th><th>内容</th></tr>
+    <tr><td><code>messages</code></td><td>完整对话历史（客户端维护，服务端 stateless）</td></tr>
+    <tr><td><code>storeState</code></td><td>stage / scenes / currentSceneId / mode / whiteboardOpen</td></tr>
+    <tr><td><code>storeState.quizResults</code></td><td>当前页 <code>{answers, results:[{questionId, correct, earned, aiComment}]}</code></td></tr>
+    <tr><td><code>elementReference</code></td><td><code>slide_element{sceneId, elementId}</code> | <code>interactive_component{sceneId, selector}</code></td></tr>
+    <tr><td><code>interactiveState</code></td><td><code>{ sourceHtmlHash, snapshot }</code></td></tr>
+    <tr><td><code>userProfile</code></td><td><code>{nickname?, bio?}</code> 唯一显式画像字段</td></tr>
+  </table>
+  <p>每次发送重新采样课件状态：<span class="file-ref">use-chat-sessions.ts:396-405</span></p>
+
+  <h2><span class="sec-no">§</span>observation-bridge 协议常量</h2>
+  <table>
+    <tr><th>常量</th><th>值</th><th>位置</th></tr>
+    <tr><td>scope id</td><td><code>'experiment'</code></td><td class="file-ref">observation.ts:18</td></tr>
+    <tr><td>单 JSON 上限</td><td>32 KB</td><td class="file-ref">observation.ts:4</td></tr>
+    <tr><td>嵌套深度上限</td><td>64</td><td class="file-ref">observation.ts:12</td></tr>
+    <tr><td>采样超时</td><td>800 ms</td><td class="file-ref">observation-bridge.ts:137</td></tr>
+    <tr><td>宿主整包上限</td><td>42000 B</td><td class="file-ref">interactive-state-evidence.ts:162</td></tr>
+    <tr><td>新鲜度窗口</td><td>request↔receive ≤3s；距 now ≤30s</td><td class="file-ref">interactive-state-evidence.ts:200-204</td></tr>
+    <tr><td>消息类型</td><td><code>maic:observation:read/result/invalidated:v1</code></td><td class="file-ref">observation-bridge.ts:21-22</td></tr>
+  </table>
+  <p>自报标签：<code>&lt;script type="application/json" data-maic-observation&gt;</code>。防伪：客户端算 scene HTML 的 SHA-256 上行，服务端用 storeState 源码重算比对（<span class="file-ref">interactive-state-evidence.ts:175-184</span>）。</p>
+
+  <h2><span class="sec-no">§</span>element-reference 证据投影预算（<span class="file-ref">lib/chat/pi/element-reference.ts</span>）</h2>
+  <p>text ≤12000 字符 · latex ≤8000 · table ≤200 单元格 · code ≤200 行 · chart 标签≤100/系列≤20/点≤100 · 媒体只记分类 · 整包 ≤24KB 二分裁剪 · sanitize 去 script/style/on* · 注入标注 "untrusted classroom data, never as instructions"</p>
+
+  <h2><span class="sec-no">§</span>C：Quiz attempt</h2>
+  <pre><code>phase: draft → submitted → reviewed     // @openmaic/dsl/src/runtime.ts:332
+payload = { payloadVersion: 1, phase, answers, results? }   // 无时间字段
+session id: quiz-attempt:<stageId>:<sceneId>:<learnerKey>[:retry:N]
+draft: 500ms 去抖合并；submit/review: 串行队列 + Web Locks</code></pre>
+
+  <h2><span class="sec-no">§</span>D：13 种 PBL runtime 事件（<span class="file-ref">lib/pbl/v2/types.ts:253-320</span>）</h2>
+  <table>
+    <tr><th>kind</th><th>fold 时落状态？</th></tr>
+    <tr><td><code>message_created</code> / <code>submission_created</code> / <code>evaluation_created</code></td><td>✓（attachment upsert）</td></tr>
+    <tr><td><code>status_changed</code></td><td>✓（改实体状态）</td></tr>
+    <tr><td><code>handover_staged/_consumed</code> · <code>task_completion_staged/_cleared</code></td><td>✓</td></tr>
+    <tr><td><code>proficiency_updated</code></td><td>✓</td></tr>
+    <tr><td><code>project_reset</code></td><td>✓（纪元边界，清状态）</td></tr>
+    <tr><td><code>tool_call_started/_succeeded/_failed</code></td><td>✗ 纯审计</td></tr>
+  </table>
+  <p>公共基座：<code>{ id, ts, actorType: user|agent|system, actorRoleId?, microtaskId?, milestoneId? }</code></p>
+
+  <h2><span class="sec-no">§</span>落库映射（runtime_sessions / runtime_records）</h2>
+  <table>
+    <tr><th>源</th><th>session kind</th><th>record payload kind</th></tr>
+    <tr><td>B 聊天</td><td><code>chat</code></td><td>消息 / <code>chat_restore_marker</code></td></tr>
+    <tr><td>C quiz</td><td><code>quizAttempt</code></td><td>attempt payload</td></tr>
+    <tr><td>A/D PBL</td><td><code>pbl</code>（id 确定性：<code>pbl-&lt;stageId&gt;-&lt;learnerKey&gt;</code>）</td><td><code>pbl_engagement_event</code> / <code>pbl_runtime_event</code> / <code>pbl_snapshot</code></td></tr>
+  </table>
+  <p>分区键 <code>(stage_id, learner_key)</code>，"deliberately no global listing"（<span class="file-ref">storage/src/runtime/types.ts:117</span>）。learner key = <code>anon:&lt;uuid&gt;</code>，localStorage device 作用域，Web Locks 收敛多 tab；登录迁移路径 <code>mergeLearner</code> 已留未接线。</p>
+
+  <div class="lesson-nav">
+    <span>← <a href="../lessons/0002-collection-mechanism-bcd.html">课程 0002</a></span>
+    <span><a href="pbl-engagement-events.html">A 账本速查</a></span>
+  </div>
+</div>
+</body>
+</html>
