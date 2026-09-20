@@ -1,7 +1,7 @@
 # 地图：AI 课堂交互采集与学生画像设计蓝图
 
 Type: wayfinder:map
-Status: active
+Status: complete
 
 ## Destination
 
@@ -30,6 +30,7 @@ Status: active
 - [T4：课程内容模型与知识图谱](issues/07-content-model-knowledge-graph.md): AI 抽取+教师审校建谱；概念节点（100–300/门）+先修边+概念→材料片段/测验题双映射；图谱版本化（概念 ID 稳定，改=新增/废弃）；补习模块 AI 生成（讲解+重看指引+巩固练习）、高频模块教师固化；深化模块 MVP 只课内加深、开放外拓远期；模块=单概念小簇挂概念 ID
 - [T5：分层教学策略——L2 补基础与加速加深](issues/08-tiered-teaching-l2.md): 确定性规则引擎触发；补基础双通道（先修检查<0.6 + 失败信号）、插入不替换、两轮不过降层+教师聚合可见；加速=≥0.85+确认测、加深=掌握高×求知欲高、掌握高求知欲低只加速；L1=三态助教策略查表（提示式优于给答案）；护栏四条（衰减/声明/插入/再挑战）；L3 远期一段带过
 - [T6：闭环评估机制](issues/09-closed-loop-evaluation.md): 三层指标（学习成效/机制健康/体验）+模块末例行回顾；观察性起步、预留分桶 A/B；第二阶闭环=阈值校准/打标抽检/模块质量回调，教师在环不自动调参；教师端=班级聚合三件套+个体掌握地图（均进 MVP，不见原文与行为标签）
+- [T7：报告大纲确认与撰写](issues/10-report-writing.md): 大纲经用户确认（前 3 章+第 8 章详细、其余略写），最终报告已产出至 reports/ai-classroom-profiling-blueprint.md（约 1.2 万字，纯文字）——目的地达成
 
 ## Not yet specified
 
