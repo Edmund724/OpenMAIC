@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>名词表 · 大白话版</title>
+<link rel="stylesheet" href="../assets/teach/base.css">
+</head>
+<body>
+<div class="page">
+  <div class="lesson-kicker">Reference · 名词表（大白话版）</div>
+  <h1>课程名词表</h1>
+  <div class="lesson-meta">面向非科班读者 · 每个词一句话大白话 + 一句"在 OpenMAIC 里指什么" · 新课程涉及的术语会持续补充</div>
+
+  <h2><span class="sec-no">§</span>网页与浏览器</h2>
+  <table>
+    <tr><th>术语</th><th>大白话</th><th>在本课程里</th></tr>
+    <tr><td>客户端 / 前端</td><td>你浏览器里跑的那部分程序（看得见、点得动的）</td><td>课堂页面、课件、发消息的代码</td></tr>
+    <tr><td>服务端 / 后端</td><td>远处服务器上跑的那部分程序（看不见，负责存数据、调 AI）</td><td><code>app/api/</code> 下的路由</td></tr>
+    <tr><td>请求 / 响应</td><td>客户端向服务端"递纸条问事"，服务端"回纸条"</td><td>每发一条消息就是一次请求</td></tr>
+    <tr><td>stateless（无状态）</td><td>服务端不记事——每次请求都得把前因后果一起带来</td><td>聊天路由不存会话，历史全在请求里</td></tr>
+    <tr><td>HTML / 源码</td><td>网页的"图纸文本"，浏览器照它画出页面</td><td>每个课件本质是一份 HTML 文本</td></tr>
+    <tr><td>JSON</td><td>一种写数据的通用文本格式，花括号键值对</td><td>事件、快照、请求体全是 JSON</td></tr>
+    <tr><td>iframe</td><td>页面里嵌的一个"独立小窗口"，里面的内容和外面互相隔离</td><td>交互课件跑在 iframe 里，防止它搞坏课堂页面</td></tr>
+    <tr><td>postMessage</td><td>浏览器给 iframe 内外两边留的唯一"传话筒"</td><td>宿主向课件要状态就靠它</td></tr>
+    <tr><td>宿主（host）</td><td>嵌别人页面的那个外层页面</td><td>OpenMAIC 课堂页面是课件的宿主</td></tr>
+    <tr><td>localStorage</td><td>浏览器给每个网站的一小块本地存储，关了浏览器也在</td><td>匿名 learner key 存在这里</td></tr>
+    <tr><td>选择器（selector）</td><td>用一段文本"点名"页面里某个元素的方式</td><td>点选交互组件提问时用它定位</td></tr>
+  </table>
+
+  <h2><span class="sec-no">§</span>安全与校验</h2>
+  <table>
+    <tr><th>术语</th><th>大白话</th><th>在本课程里</th></tr>
+    <tr><td>哈希（hash）</td><td>给任意内容算出一个固定长度的"指纹"；内容改一个字，指纹全变</td><td>SHA-256 指纹用来确认"状态确实来自这份课件"</td></tr>
+    <tr><td>SHA-256</td><td>一种具体的哈希算法，指纹长 64 个十六进制字符</td><td>客户端算课件源码指纹上行，服务端重算比对</td></tr>
+    <tr><td>新鲜度窗口</td><td>只认"刚出炉"的数据，放久了就作废</td><td>快照超过 30 秒服务端拒收</td></tr>
+    <tr><td>sanitize（消毒）</td><td>把文本里能执行动作的坏部分（脚本等）剥掉再使用</td><td>元素证据进 prompt 前剥掉 script/on* 属性</td></tr>
+    <tr><td>prompt 注入</td><td>坏人在数据里藏"指令"，骗 AI 把它当命令执行</td><td>所以注入时标注"这是数据，不是指令"</td></tr>
+  </table>
+
+  <h2><span class="sec-no">§</span>数据与存储</h2>
+  <table>
+    <tr><th>术语</th><th>大白话</th><th>在本课程里</th></tr>
+    <tr><td>协议（protocol）</td><td>双方事先约定好的"对话暗号格式"</td><td><code>maic:observation:read:v1</code> 就是暗号</td></tr>
+    <tr><td>快照（snapshot）</td><td>某一瞬间状态的"照片"</td><td>发消息时对课件状态拍一张</td></tr>
+    <tr><td>字节 / KB</td><td>数据的体积单位；1 KB ≈ 500 个汉字</td><td>快照限 32 KB</td></tr>
+    <tr><td>超时（timeout）</td><td>等答复最多等这么久，等不到就当失败</td><td>采样课件状态最多等 800ms</td></tr>
+    <tr><td>环形缓冲</td><td>定长记事本，写满了就从最旧的一页撕掉接着写</td><td>engagement 账本上限 500 条</td></tr>
+    <tr><td>追加式账本</td><td>只许往后记、不许涂改的流水账</td><td>事件只能 append，不能改历史</td></tr>
+    <tr><td>去抖（debounce）</td><td>高频小动作攒一会儿再一次性处理</td><td>quiz 草稿攒 500ms 才写一次</td></tr>
+    <tr><td>重放（replay / fold）</td><td>把流水账从头过一遍，重建出"现在的状态"</td><td>fold.ts 从事件重建学习者状态</td></tr>
+    <tr><td>分区键</td><td>决定"这条数据归哪一堆"的分组依据</td><td><code>(stage_id, learner_key)</code></td></tr>
+    <tr><td>JSONB</td><td>Postgres 数据库里存 JSON 的列类型</td><td>runtime_records.data 就是 JSONB</td></tr>
+    <tr><td>schema</td><td>数据的"表格模板"：有哪些字段、各是什么类型</td><td>zod schema 定义工具参数形状</td></tr>
+    <tr><td>枚举（enum）</td><td>字段只允许取固定几个值之一</td><td>kind 只能是 error/struggle/question</td></tr>
+    <tr><td>水位线（watermark）</td><td>账本里"已经抄到第几行"的书签</td><td>drain 用它记住哪些事件已写库</td></tr>
+    <tr><td>at-least-once</td><td>"宁可重复送，不能漏送"的送货策略；重复由收货方去掉</td><td>drain 写库策略，fold 负责去重</td></tr>
+  </table>
+
+  <h2><span class="sec-no">§</span>AI 相关</h2>
+  <table>
+    <tr><th>术语</th><th>大白话</th><th>在本课程里</th></tr>
+    <tr><td>LLM / 大模型</td><td>能读能写的 AI（如 GPT、Kimi）</td><td>Instructor、Director 等 agent 的大脑</td></tr>
+    <tr><td>prompt</td><td>写给 AI 的指令文本，决定它怎么行动</td><td>观察记录的"判定标准"就写在 prompt 里</td></tr>
+    <tr><td>工具调用（tool call）</td><td>AI 按约定格式"举手申请做一件事"，由程序真正执行</td><td><code>record_observation</code> 就是一个工具</td></tr>
+    <tr><td>token</td><td>AI 读写的最小文本单位，约等于半个汉字</td><td>prompt 长度、裁剪预算都以它为成本</td></tr>
+    <tr><td>agent</td><td>一个有角色、有目标、能调工具的 AI 实例</td><td>Instructor / evaluator / 同学 agent</td></tr>
+  </table>
+
+  <div class="lesson-nav">
+    <span><a href="../lessons/0001-pbl-engagement-events.html">课程 0001</a> · <a href="../lessons/0002-collection-mechanism-bcd.html">0002</a></span>
+    <span><a href="../../MISSION.md">MISSION</a></span>
+  </div>
+</div>
+</body>
+</html>
