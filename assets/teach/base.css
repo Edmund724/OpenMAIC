@@ -1,0 +1,195 @@
+/* OpenMAIC 教学空间共享样式 — Tufte 风格，中文排版优化 */
+:root {
+  --paper: #fdfbf7;
+  --ink: #1f2933;
+  --ink-soft: #52606d;
+  --accent: #8b3a2a;
+  --accent-soft: #f5e6e0;
+  --rule: #d8d2c4;
+  --code-bg: #f3efe6;
+  --ok: #2f6f4f;
+  --ok-bg: #e6f2ea;
+  --bad: #a33327;
+  --bad-bg: #fbe9e5;
+  --mono: "SF Mono", "JetBrains Mono", Consolas, "Courier New", monospace;
+  --serif: "Noto Serif SC", "Source Han Serif SC", "Songti SC", Georgia, serif;
+  --sans: -apple-system, "PingFang SC", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+}
+* { box-sizing: border-box; }
+html { font-size: 17px; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--serif);
+  line-height: 1.85;
+  -webkit-font-smoothing: antialiased;
+}
+.page {
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 3rem 1.5rem 5rem;
+}
+/* 头部 */
+.lesson-kicker {
+  font-family: var(--sans);
+  font-size: 0.78rem;
+  letter-spacing: 0.18em;
+  color: var(--accent);
+  text-transform: uppercase;
+  margin-bottom: 0.5rem;
+}
+h1 {
+  font-size: 1.85rem;
+  line-height: 1.35;
+  margin: 0 0 0.6rem;
+  font-weight: 700;
+}
+.lesson-meta {
+  font-family: var(--sans);
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+  border-bottom: 1px solid var(--rule);
+  padding-bottom: 1.2rem;
+  margin-bottom: 2rem;
+}
+h2 {
+  font-size: 1.3rem;
+  margin: 2.8rem 0 0.9rem;
+  padding-top: 1.4rem;
+  border-top: 1px solid var(--rule);
+  font-weight: 700;
+}
+h2 .sec-no { color: var(--accent); font-family: var(--sans); font-size: 0.85em; margin-right: 0.4em; }
+h3 { font-size: 1.05rem; margin: 1.8rem 0 0.5rem; font-weight: 700; }
+p { margin: 0.7rem 0; }
+/* 行内代码与文件引用 */
+code {
+  font-family: var(--mono);
+  font-size: 0.84em;
+  background: var(--code-bg);
+  padding: 0.08em 0.35em;
+  border-radius: 3px;
+}
+.file-ref {
+  font-family: var(--mono);
+  font-size: 0.78em;
+  color: var(--accent);
+  white-space: nowrap;
+}
+pre {
+  background: var(--code-bg);
+  border-left: 3px solid var(--accent);
+  padding: 0.9rem 1.1rem;
+  overflow-x: auto;
+  font-size: 0.82rem;
+  line-height: 1.6;
+  border-radius: 0 4px 4px 0;
+}
+pre code { background: none; padding: 0; }
+/* 表格（booktabs 风） */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--sans);
+  font-size: 0.86rem;
+  margin: 1.2rem 0;
+  line-height: 1.6;
+}
+th {
+  text-align: left;
+  border-top: 2px solid var(--ink);
+  border-bottom: 1px solid var(--ink);
+  padding: 0.45rem 0.6rem;
+  font-weight: 600;
+}
+td { border-bottom: 1px solid var(--rule); padding: 0.5rem 0.6rem; vertical-align: top; }
+tr:last-child td { border-bottom: 2px solid var(--ink); }
+td code { font-size: 0.8em; }
+/* 提示框 */
+.callout {
+  border-left: 3px solid var(--accent);
+  background: var(--accent-soft);
+  padding: 0.8rem 1.1rem;
+  margin: 1.2rem 0;
+  font-size: 0.94rem;
+}
+.callout.insight { border-color: var(--ok); background: var(--ok-bg); }
+.callout.paper { border-color: #5a6b8c; background: #eef1f7; }
+.callout .tag {
+  font-family: var(--sans);
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  font-weight: 600;
+  display: block;
+  margin-bottom: 0.2rem;
+}
+.callout .tag.warn { color: var(--accent); }
+.callout .tag.good { color: var(--ok); }
+.callout .tag.ref { color: #5a6b8c; }
+blockquote {
+  margin: 1rem 0;
+  padding: 0.3rem 1.1rem;
+  border-left: 3px solid var(--rule);
+  color: var(--ink-soft);
+  font-size: 0.94rem;
+}
+/* 测验 */
+.quiz {
+  font-family: var(--sans);
+  background: #fff;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 1.1rem 1.3rem;
+  margin: 1.2rem 0;
+  font-size: 0.92rem;
+}
+.quiz .q { font-weight: 600; margin-bottom: 0.7rem; line-height: 1.6; }
+.quiz .opt {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 0.5rem 0.8rem;
+  margin: 0.35rem 0;
+  cursor: pointer;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  transition: background 0.12s;
+}
+.quiz .opt:hover:not(:disabled) { background: var(--code-bg); }
+.quiz .opt:disabled { cursor: default; opacity: 0.85; }
+.quiz .opt.correct { background: var(--ok-bg); border-color: var(--ok); opacity: 1; }
+.quiz .opt.wrong { background: var(--bad-bg); border-color: var(--bad); opacity: 1; }
+.quiz .why {
+  display: none;
+  margin-top: 0.6rem;
+  padding: 0.55rem 0.8rem;
+  background: var(--code-bg);
+  border-radius: 4px;
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+.quiz.done .why { display: block; }
+/* 页脚导航 */
+.lesson-nav {
+  margin-top: 3.5rem;
+  padding-top: 1.2rem;
+  border-top: 1px solid var(--rule);
+  font-family: var(--sans);
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+a { color: var(--accent); text-decoration: none; border-bottom: 1px solid transparent; }
+a:hover { border-bottom-color: var(--accent); }
+@media print {
+  body { background: #fff; }
+  .quiz .opt { border: 1px solid #999; }
+  .quiz .why { display: block; }
+}

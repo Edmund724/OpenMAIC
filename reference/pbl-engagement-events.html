@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>速查：PBL engagement 事件账本 — 事件定义与出处</title>
+<link rel="stylesheet" href="../assets/teach/base.css">
+</head>
+<body>
+<div class="page">
+  <div class="lesson-kicker">Reference · 速查表</div>
+  <h1>PBL engagement 事件账本</h1>
+  <div class="lesson-meta">事件 schema、生产者、触发条件、下游消费 · 核实于 2026-09-20（当前 main） · 配套课程：<a href="../lessons/0001-pbl-engagement-events.html">0001</a></div>
+
+  <h2><span class="sec-no">§</span>事件结构</h2>
+  <pre><code>{ id, kind, microtaskId?, milestoneId?, ts, payload? }   // lib/pbl/v2/types.ts:216-226
+// PBLProjectV2 上的 append-only 环形缓冲，上限 500 条
+// MAX_ENGAGEMENT_EVENTS = 500  @ kernel/engagement.ts:28</code></pre>
+  <p>事件分 <b>active</b>（有生产代码写入）与 <b>legacy</b>（schema 还在、无生产写入，仅测试/兼容逻辑引用）。</p>
+
+  <h2><span class="sec-no">§</span>事件总表（active）</h2>
+  <table>
+    <tr><th>kind</th><th>生产者</th><th>触发条件（定义）</th><th>payload</th></tr>
+    <tr>
+      <td><code>learner_turn</code></td>
+      <td>runtime 自动</td>
+      <td>学生每发一条消息，调 LLM 之前记录 <span class="file-ref">instructor.ts:1345-1349</span></td>
+      <td><code>{ chars }</code> 消息 JS 字符串长度</td>
+    </tr>
+    <tr>
+      <td><code>observation_error</code></td>
+      <td>LLM（record_observation）</td>
+      <td>"learner hit a real bug worth tracking" <span class="file-ref">schemas.ts:62-91</span></td>
+      <td><code>{ signature, label?, note? }</code></td>
+    </tr>
+    <tr>
+      <td><code>observation_struggle</code></td>
+      <td>LLM（record_observation）</td>
+      <td>"stuck longer than expected without an explicit error"</td>
+      <td><code>{ signature, label?, note? }</code></td>
+    </tr>
+    <tr>
+      <td><code>observation_question</code></td>
+      <td>LLM（record_observation）</td>
+      <td>"a substantive, non-routine question"</td>
+      <td><code>{ signature, label?, note? }</code></td>
+    </tr>
+    <tr>
+      <td><code>observation_concept_unlocked</code></td>
+      <td><b>确定性代码</b>（非 LLM）</td>
+      <td>提交评测通过（≥60 分）<span class="file-ref">submission.tsx:544-561</span></td>
+      <td><code>{ signature: "submission_passed_&lt;taskId&gt;" }</code></td>
+    </tr>
+    <tr>
+      <td><code>microtask_opened</code></td>
+      <td>runtime 自动</td>
+      <td>任务 todo → in_progress <span class="file-ref">progress.ts:452,548,792</span></td>
+      <td>无</td>
+    </tr>
+    <tr>
+      <td><code>microtask_completed</code></td>
+      <td>runtime 自动</td>
+      <td>advanceMicrotask / 整幕完成 <span class="file-ref">progress.ts:509-513,695-699</span></td>
+      <td><code>{ reason? }</code></td>
+    </tr>
+    <tr>
+      <td><code>proficiency_changed</code></td>
+      <td>确定性代码</td>
+      <td>tier 迁移时由 emit() 写入 <span class="file-ref">dynamic-signals.ts:58-82</span></td>
+      <td><code>{ from, to, reason, score, confidence }</code></td>
+    </tr>
+  </table>
+
+  <h2><span class="sec-no">§</span>事件总表（legacy，无生产写入）</h2>
+  <table>
+    <tr><th>kind</th><th>现状</th></tr>
+    <tr><td><code>microtask_skipped</code></td><td>仅类型声明与聚合 case <span class="file-ref">types.ts:206</span></td></tr>
+    <tr><td><code>closing_check</code></td><td>schema 在 <span class="file-ref">schemas.ts:19-57</span>；工具已移除；新数据 closingQuality 恒为 undefined</td></tr>
+    <tr><td><code>stage_synthesis_check</code></td><td>同上；残留的"自发表述 escape hatch"描述在 <span class="file-ref">schemas.ts:49</span></td></tr>
+  </table>
+
+  <h2><span class="sec-no">§</span>record_observation 工具</h2>
+  <pre><code>description: "Record a notable learning event mid-task (error, struggle, question)
+  for the evaluator. Analytics only — this does NOT advance the task or gate
+  completion. Use sparingly, for moments worth showing the evaluator."
+  — lib/pbl/v2/agents/instructor.ts:1423-1470
+
+kind: enum ['error','struggle','question']   // concept_unlocked 已不在枚举中
+signature: 机器标签，LLM 自由命名（如 'undefined_variable'），不给学生看
+label: 可选，人类可读名（≤60 字符，用学生内容语言）
+note: 可选，一句话引用支撑该观察的学生行为（≤500 字符）</code></pre>
+  <p>prompt 侧唯一规则（<span class="file-ref">prompts/instructor-base-rules.md:232-234</span>）："Use it sparingly, not on routine turns." 无代码级频率限制。</p>
+  <p><b>重复判定（记录时）</b>：同 microtask 下已有同 signature 的 error → <code>repeatedError=true</code> <span class="file-ref">instructor.ts:1434-1446</span>。<b>聚合层</b>：<code>repeatErrorCount = errorCount − 去重signature数</code> <span class="file-ref">kernel/engagement.ts:143</span>。</p>
+
+  <h2><span class="sec-no">§</span>proficiency 计分（signalFromObservation <span class="file-ref">proficiency.ts:484-522</span>）</h2>
+  <table>
+    <tr><th>观察</th><th>direction</th><th>有效权重</th></tr>
+    <tr><td>error（首次）</td><td>−0.4</td><td>0.315</td></tr>
+    <tr><td>error（重复）</td><td>−0.7</td><td>0.45</td></tr>
+    <tr><td>struggle</td><td>−0.5</td><td>0.36</td></tr>
+    <tr><td>question</td><td>−0.3</td><td>0.245</td></tr>
+    <tr><td>concept_unlocked</td><td>+0.5</td><td>0.4</td></tr>
+    <tr><td>task_speed（≤2 轮 / &gt;10 轮）</td><td>+0.5 / −0.5</td><td>0.3（cap）</td></tr>
+  </table>
+  <pre><code>// applySignal @ proficiency.ts:711-726
+newScore      = clamp(0.2 · direction · weight + 0.8 · score, −1, 1)   // EWMA α=0.2
+newConfidence = clamp(confidence + weight · 0.5, 0, 1)
+// 门控：confidence ≥ 0.4；dynamic 源 ≥3 信号；距上次换档 ≥5 个 learner turn
+// 迟滞：进 advanced ≥0.50 / 出 ≤0.20；进 beginner ≤−0.33 / 出 ≥−0.20</code></pre>
+  <p>学生明说难度（"太难了"/"我是初学者"）→ <code>adjust_difficulty</code> 工具 → explicit override，绕过 EWMA 直接锚定 <span class="file-ref">dynamic-signals.ts:191-224</span>。</p>
+
+  <h2><span class="sec-no">§</span>聚合与消费</h2>
+  <table>
+    <tr><th>消费者</th><th>位置</th><th>消费什么</th></tr>
+    <tr><td>PBLEngagementSummary</td><td class="file-ref">kernel/engagement.ts:67-153</td><td>时长、轮次、错误/重复错误、signature 列表、解锁概念</td></tr>
+    <tr><td>milestone 评测 prompt</td><td class="file-ref">eval-prompts.ts:155-185</td><td>summary 文本注入 evaluator</td></tr>
+    <tr><td>披露阶梯 stuck 信号</td><td class="file-ref">instructor.ts:455-492</td><td>repeat/struggle 计数驱动 RELEASE/HOLD</td></tr>
+    <tr><td>完成页统计</td><td class="file-ref">completion-stats.ts:124-162</td><td>独立率、最难里程碑、highlights</td></tr>
+  </table>
+
+  <h2><span class="sec-no">§</span>明确未采集（负证据，已全库搜索验证）</h2>
+  <p>翻页埋点 · 页面停留时长 · 逐题用时 · 光标/滚动 · 打断事件。翻页只能由每次发消息捎带的 <code>storeState.currentSceneId</code> 快照间接推断。</p>
+
+  <div class="lesson-nav">
+    <span>← <a href="../lessons/0001-pbl-engagement-events.html">课程 0001：事件如何被定义</a></span>
+    <span><a href="../RESOURCES.md">RESOURCES.md</a></span>
+  </div>
+</div>
+</body>
+</html>

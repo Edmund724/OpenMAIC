@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>0001 · PBL engagement 事件账本：每个事件如何被定义</title>
+<link rel="stylesheet" href="../assets/teach/base.css">
+</head>
+<body>
+<div class="page">
+  <div class="lesson-kicker">OpenMAIC 交互采集 · Lesson 0001</div>
+  <h1>PBL engagement 事件账本：每个事件如何被定义</h1>
+  <div class="lesson-meta">对应报告 §3.1-A · 核实于当前 main（2026-09-20） · 速查表：<a href="../reference/pbl-engagement-events.html">reference/pbl-engagement-events.html</a></div>
+
+  <p>你点名的核心问题是：<b>"学生独立掌握某概念"这种事件，系统凭什么判定它发生了？</b>答案是理解整个采集层的一把钥匙——OpenMAIC 对每种事件的"定义方式"分三类，而"谁有资格定义"比"定义内容"更能体现设计思想。学完本课，你应该能给每个事件说出：谁记录、什么条件、payload 是什么、谁消费。</p>
+
+  <h2><span class="sec-no">1</span>全景：四类数据源（报告 §3.1）</h2>
+  <table>
+    <tr><th></th><th>数据源</th><th>一句话</th><th>粒度</th></tr>
+    <tr><td><b>A</b></td><td>PBL engagement 事件账本</td><td>追加式学习行为事件流（本课主角）</td><td>signature 级错误标签</td></tr>
+    <tr><td><b>B</b></td><td>经典课堂聊天</td><td>stateless，每条消息捎带完整现场快照</td><td>消息 + 课件状态</td></tr>
+    <tr><td><b>C</b></td><td>Quiz attempt</td><td>draft → submitted → reviewed 三阶段</td><td>逐题对错，无用时</td></tr>
+    <tr><td><b>D</b></td><td>PBL runtime 事件</td><td>13 种系统事实（工具调用、状态变更…）</td><td>审计/重放级</td></tr>
+  </table>
+  <p>A 是"学习行为"数据，D 是"系统运行"数据——两者是 PBL project 上<b>两套独立的环形账本</b>（各 500 条上限），但落库时写进<b>同一张</b> <code>runtime_records</code> 表，靠 payload 里的 <code>kind: 'pbl_engagement_event' | 'pbl_runtime_event'</code> 区分（<span class="file-ref">lib/pbl/v2/runtime/record-payloads.ts:48-60</span>）。B/C 走同两张表的不同 session kind。</p>
+
+  <h2><span class="sec-no">2</span>账本本体</h2>
+  <pre><code>// lib/pbl/v2/types.ts:216-226
+{ id, kind, microtaskId?, milestoneId?, ts, payload? }</code></pre>
+  <p>追加式、环形缓冲 500 条（<code>MAX_ENGAGEMENT_EVENTS</code>，<span class="file-ref">kernel/engagement.ts:28</span>）。每条事件都挂在具体 microtask/milestone 上，自带时间戳——耗时、序列、每任务密度都能事后算出。</p>
+
+  <h2><span class="sec-no">3</span>关键框架：三类生产者</h2>
+  <p>"事件如何被定义"在 OpenMAIC 里没有统一答案，而是按<b>谁有资格判定</b>分成三类。这是全课最重要的一张表：</p>
+  <table>
+    <tr><th>生产者</th><th>事件</th><th>定义权在</th></tr>
+    <tr><td><b>runtime 确定性代码</b></td><td><code>learner_turn</code>、<code>microtask_opened/completed</code></td><td>代码：发生了就是发生了</td></tr>
+    <tr><td><b>LLM 主动判断</b>（Instructor 调 <code>record_observation</code>）</td><td><code>observation_error / _struggle / _question</code></td><td>prompt：schema 描述 + "use sparingly"</td></tr>
+    <tr><td><b>代码按规则判定</b></td><td><code>observation_concept_unlocked</code>、<code>proficiency_changed</code></td><td>确定性判据：提交通过 / tier 迁移</td></tr>
+  </table>
+  <div class="callout insight"><span class="tag good">设计原则</span>越影响"学生状态"结论的事件，越被移出 LLM 的自由裁量。"掌握概念"曾是 LLM 判断，现在改成了代码判据——这正是你点名问题的答案，下面专节展开。</div>
+
+  <h2><span class="sec-no">4</span>逐个事件：定义与出处</h2>
+
+  <h3>4.1 learner_turn — runtime 记"量"</h3>
+  <pre><code>// lib/pbl/v2/agents/instructor.ts:1345-1349（调用 LLM 之前）
+recordEvent(project, 'learner_turn', {
+  microtaskId: microtask.id, milestoneId: milestone.id,
+  payload: { chars: userMessage.length },   // JS 字符串长度（UTF-16 code unit）
+});</code></pre>
+  <p>学生每发一条消息记一条，无 LLM 参与。这就是论文里 <b>MsgNum/MsgLen</b> 的开源对应物——论文用 log(消息数) 和 log(消息字符数) 与模块测验成绩做相关分析，发现显著正相关（MAIC.md §5.2，Table 3）。Simulator（角色扮演场景）侧同样记录（<span class="file-ref">simulator.ts:477</span>）。</p>
+
+  <h3>4.2 observation_error / struggle / question — LLM 记"质"</h3>
+  <p>Instructor agent 只有两个记录类工具，<code>record_observation</code> 是其一（<span class="file-ref">instructor.ts:1423-1470</span>）。它的"定义"写在两个地方，全部原文照录：</p>
+  <p><b>① 工具 description（给模型看的行为说明）：</b></p>
+  <blockquote>"Record a notable learning event mid-task (error, struggle, question) for the evaluator. <b>Analytics only — this does NOT advance the task or gate completion.</b> Use sparingly, for moments worth showing the evaluator."</blockquote>
+  <p><b>② 参数 schema 的逐字段 describe</b>（<span class="file-ref">lib/pbl/v2/operations/runtime/schemas.ts:62-91</span>）：</p>
+  <pre><code>kind: 'error'    → "learner hit a real bug worth tracking"
+      'struggle' → "learner is stuck longer than expected without an explicit error"
+      'question' → "learner asked a substantive, non-routine question"
+signature → "Short stable MACHINE tag ... so duplicates can be deduped
+             (e.g. 'undefined_variable', 'off_by_one').
+             This is never shown to the learner — use label for the human-readable name."
+label     → 可选，≤60 字符，人类可读，用学生的内容语言
+note      → 可选，≤500 字符，"quoting / referencing the learner action that justifies this observation"</code></pre>
+  <p><b>③ system prompt 里的唯一规则</b>（<span class="file-ref">lib/pbl/v2/prompts/instructor-base-rules.md:232-234</span>）：</p>
+  <blockquote>"You may call record_observation when something analytically interesting happens (a recurring error, a sticky struggle, a substantive question). It is for the evaluator only — it does NOT advance or gate anything. Use it sparingly, not on routine turns."</blockquote>
+  <div class="callout"><span class="tag warn">注意</span>节流完全靠 "use sparingly" 这句软约束，代码里<b>没有任何频率/冷却限制</b>。LLM 判定的质量标准就是上面三句话——"值得给评测者看的时刻"。你自己的系统若照搬，要想清楚是否接受这种模糊性。</div>
+
+  <h3>4.3 observation_concept_unlocked — "掌握"的定义（重点）</h3>
+  <p>报告里写"Instructor agent 观察到学生独立掌握某概念"——<b>这已经过时了</b>。当前代码的真相分三层：</p>
+  <p><b>现状（唯一生产者）</b>：提交评测<b>通过（≥60 分）</b>后，由前端提交流程的确定性代码写入，signature 固定为 <code>submission_passed_&lt;taskId&gt;</code>（<span class="file-ref">components/scene-renderers/pbl/v2/submission.tsx:544-561</span>）。也就是说，<b>当前"掌握"的 operational definition 是"该任务的作品通过了自动评测"</b>——可复现、可单测，但粒度粗：它只认"任务完成"，不认"对话中表现出的领悟"。</p>
+  <p><b>历史痕迹</b>：<code>record_observation</code> 的 kind 枚举里曾经接受 <code>concept_unlocked</code>，现已移除（<span class="file-ref">schemas.ts:64</span> 只剩 error/struggle/question）。两处化石可以佐证旧设计存在过：</p>
+  <ul>
+    <li><span class="file-ref">tier-guidance.ts:61</span> 的 beginner 档指引仍写着 "record <code>concept_unlocked</code> and advance"——<b>与工具 schema 矛盾的过时 prompt 文本</b>（模型照做会收到 schema 校验错误）；</li>
+    <li><span class="file-ref">instructor.ts:985</span> 的 <code>stripLeakedToolJson</code> 正则，专门清理助手文本里泄漏的 <code>{"kind":"concept_unlocked|error|struggle|question",...}</code> JSON——说明旧版让模型用裸 JSON 记录观察，后来才改成正式工具。</li>
+  </ul>
+  <p><b>论文版（未开源）</b>：论文 3.2.1 的"掌握"由<b>对话采集 agent + summarization agent</b> 从自然对话中抽取学术特征，组织成结构化标签画像（MAIC.md:152-154）。这条路在开源版整条缺失——所以"对话中显露的理解"这个信号，当前代码无处可记。</p>
+  <div class="callout insight"><span class="tag good">对你造系统的启示</span>OpenMAIC 的演进方向是：<b>影响状态的判定，从 LLM 自由裁量退到确定性判据</b>。代价是信号粒度变粗。如果你需要"对话中掌握"这种细粒度信号，要么恢复 LLM 判定并加上校验/去重机制，要么像论文那样做独立的采集 agent——两种路线都要直面"LLM 判定不可靠"这个问题（OpenMAIC 的选择是：LLM 只负责无关痛痒的 analytics，状态判定全归代码）。</div>
+
+  <h3>4.4 microtask_opened / completed — runtime 记任务生命周期</h3>
+  <p>全部由确定性代码触发：<code>opened</code> 在任务 todo→in_progress 时（<span class="file-ref">progress.ts:452,548,792</span>），<code>completed</code> 在 advanceMicrotask 时带 <code>{ reason }</code>（<span class="file-ref">progress.ts:509-513</span>；reason 如 <code>"Latest task submission passed evaluation (87/100)."</code>）。两个事件的时间戳之差就是任务耗时——<b>耗时是算出来的，不是埋点埋出来的</b>。<code>microtask_skipped</code> 类型还在但<b>无任何生产代码写入</b>（遗留）。</p>
+
+  <h3>4.5 proficiency_changed — 代码记状态迁移</h3>
+  <p>唯一写入点是 proficiency 引擎的 <code>emit()</code>（<span class="file-ref">dynamic-signals.ts:58-82</span>）：tier 发生迁移时记录 <code>{ from, to, reason, score, confidence }</code>。注意 <code>adjust_difficulty</code> 工具本身不写事件——它只是把学生明说的难度要求（"太难了"、"我是初学者"，任意语言）转成 explicit override，绕过 EWMA 直接锚定 tier；只有当这导致 tier 实际变化时，才由 emit 留下这条事件。</p>
+
+  <h3>4.6 遗留类型：closing_check / stage_synthesis_check</h3>
+  <p>schema 还在（<span class="file-ref">schemas.ts:19-57</span>），但工具已移除、无生产写入。其中 <code>stage_synthesis_check</code> 的 schema 里留着全库最后一句"自发表述"判定的痕迹：<i>"If the learner had already articulated the concept spontaneously (the escape hatch — you did not need to ask), quote that articulation here."</i>（<span class="file-ref">schemas.ts:49</span>）——旧设计里"主动说出"和"被问出来"是有别的，这个新设计里也没有了。聚合层 <code>closingQuality</code> 对新数据恒为 undefined。</p>
+
+  <h2><span class="sec-no">5</span>signature：LLM 命名、代码判重</h2>
+  <p><code>signature</code> 是 LLM <b>自由生成</b>的机器标签（schema 只要求非空字符串，给例子 <code>'undefined_variable'</code>），不是枚举。判重分两层：</p>
+  <ul>
+    <li><b>记录时</b>（<span class="file-ref">instructor.ts:1434-1446</span>）：同 microtask 下已有同 signature 的 error → 标记 <code>repeatedError=true</code>，proficiency 按 −0.7（而非首次的 −0.4）计；</li>
+    <li><b>聚合时</b>（<span class="file-ref">kernel/engagement.ts:143</span>）：<code>repeatErrorCount = error总数 − 去重signature数</code>。</li>
+  </ul>
+  <div class="callout"><span class="tag warn">隐患</span>signature 靠 LLM 命名的一致性去重——同一个错误这次叫 <code>undefined_variable</code> 下次叫 <code>undefined-var</code> 就漏判了。这是"自由文本做 key"的经典陷阱，你自己的系统可以考虑给 signature 做枚举约束或嵌入归并。</div>
+
+  <h2><span class="sec-no">6</span>下游：事件如何变成数字</h2>
+  <p>聚合函数 <code>microtaskEngagement</code>（<span class="file-ref">kernel/engagement.ts:67-153</span>）把账本折成 <code>PBLEngagementSummary</code>（时长、轮次、错误/重复错误、signature 列表、解锁概念），喂给 milestone 评测 prompt 和披露阶梯的 stuck 判定。proficiency 引擎则按固定分值把事件转成分数（<span class="file-ref">proficiency.ts:484-522</span>）：</p>
+  <table>
+    <tr><th>事件</th><th>direction</th><th>说明</th></tr>
+    <tr><td>error 首次 / 重复</td><td>−0.4 / −0.7</td><td>重复错误罚得更重——"讲了还错"是更强的信号</td></tr>
+    <tr><td>struggle / question</td><td>−0.5 / −0.3</td><td>提问也是负向信号（求助意味着没独立做出）</td></tr>
+    <tr><td>concept_unlocked</td><td>+0.5</td><td>唯一的正向观察信号</td></tr>
+  </table>
+  <pre><code>newScore = clamp(0.2 · direction · weight + 0.8 · score, −1, 1)   // EWMA，α=0.2
+// proficiency.ts:711-726；门控：confidence≥0.4、≥3 信号、距上次换档 ≥5 个 learner turn</code></pre>
+  <p>方向分和权重<b>全部硬编码</b>，LLM 只负责把观察分类成 kind + signature。这就是报告 §4.4 说的"LLM 观察、代码计分"分离：数字演进完全确定、可复现、可单测。</p>
+
+  <h2><span class="sec-no">7</span>论文对照：这套采集支撑什么、缺什么</h2>
+  <div class="callout paper"><span class="tag ref">论文 §5.1 / §5.2</span>
+  论文用课堂日志做了两类分析：① <b>MsgNum/MsgLen</b> 与成绩的相关（MAIC.md:341）——开源的 <code>learner_turn{chars}</code> 正是为此准备的数据；② <b>七类行为分类</b>（提问/发起想法/回应/协商验证/调节 AI 角色/调节课堂进程/分享情感，MAIC.md:326）——开源版<b>没有任何行为分类代码</b>，事件账本只覆盖了"错误/卡壳/提问"三个偏向困难诊断的维度。另外论文 3.2.1 的画像管线（对话采集→结构化标签）整体缺失，所以事件数据的"画像出口"在开源版只有 proficiency 单轴。</div>
+
+  <h2><span class="sec-no">8</span>带走：六条可借鉴的设计决策</h2>
+  <ol>
+    <li><b>按"判定资格"分层</b>：事实类事件归代码，诊断类事件归 LLM（且声明 analytics-only、不门禁任何流程），状态类判定归确定性规则。</li>
+    <li><b>LLM 观察、代码计分</b>：让 LLM 做它擅长的（从对话认出"这一刻值得记"），数字演进全部确定性——可复现、可回归测试。</li>
+    <li><b>事件即时间序列</b>：opened/completed 成对 + 时间戳，耗时等派生指标事后算，不冗余采集。</li>
+    <li><b>signature 机器标签 + 判重</b>：让"同一个错误反复犯"成为一等信号（−0.4 → −0.7），但要警惕自由文本 key 的漂移。</li>
+    <li><b>analytics 与流程解耦</b>：record_observation 明确 "does NOT advance or gate anything"，记录失败不影响学习流程。</li>
+    <li><b>明确不采集什么</b>：翻页、停留时长、逐题用时、光标——全是刻意留白，复杂度和隐私的主动取舍。</li>
+  </ol>
+
+  <h2><span class="sec-no">9</span>测一测（凭记忆作答，再看解析）</h2>
+
+  <div class="quiz"><script type="application/json">
+  {"q": "当前代码中，observation_concept_unlocked 事件由谁写入？",
+   "options": ["Instructor 调用 record_observation 写入", "提交评测通过后的确定性代码写入", "evaluator 在里程碑评分时顺带写入", "Director 在调度间隙判断之后写入"],
+   "answer": 1,
+   "why": "record_observation 的 kind 枚举只剩 error/struggle/question（schemas.ts:64）。concept_unlocked 的唯一生产者是提交评测通过（≥60 分）后的确定性代码，signature 固定为 submission_passed_<taskId>（submission.tsx:544-561）。"}
+  </script></div>
+
+  <div class="quiz"><script type="application/json">
+  {"q": "同一 microtask 内第二次记录相同 signature 的 error，会发生什么？",
+   "options": ["被去重逻辑丢弃，账本只留首条", "照记，proficiency 按 −0.7 而非 −0.4 计", "合并进首条事件的 note 字段里面", "触发该任务难度自动下调一档"],
+   "answer": 1,
+   "why": "重复判定在记录时做（instructor.ts:1434-1446）：同任务同 signature → repeatedError=true → 方向分 −0.7。事件本身照常进账本；聚合层 repeatErrorCount = 错误总数 − 去重 signature 数。"}
+  </script></div>
+
+  <div class="quiz"><script type="application/json">
+  {"q": "learner_turn 事件的 payload { chars } 记录的是什么？",
+   "options": ["学生消息的 JS 字符串长度", "学生消息分词之后的词数", "LLM 本轮回复的字符总数", "本任务内累计的消息字符数"],
+   "answer": 0,
+   "why": "runtime 在调用 LLM 之前自动记录（instructor.ts:1345-1349），chars = userMessage.length。它对应论文 §5.2 的 MsgNum/MsgLen 指标。"}
+  </script></div>
+
+  <div class="quiz"><script type="application/json">
+  {"q": "engagement 账本和 runtime 账本（数据源 A 与 D）落库时的关系是？",
+   "options": ["两张表，engagement 有独立的表", "同一张 runtime_records，payload.kind 区分", "engagement 只留在内存不落库", "定期合并成一条快照再写库"],
+   "answer": 1,
+   "why": "两套环形缓冲都在 project 上（各 500 条），drain 时分别包成 kind='pbl_engagement_event' / 'pbl_runtime_event' 写进同一张 runtime_records 表（record-payloads.ts:48-60）。"}
+  </script></div>
+
+  <div class="quiz"><script type="application/json">
+  {"q": "下列哪类事件的判定规则当前完全写在 prompt/schema 描述里、靠 LLM 自觉？",
+   "options": ["microtask_opened 的触发时机", "proficiency_changed 的记录条件", "error / struggle / question 的记录", "concept_unlocked 的通过门限"],
+   "answer": 2,
+   "why": "record_observation 的判定标准就是 schema 里三句 describe 加 prompt 里一句 'use sparingly'，无任何代码级频率限制。其余三项都是确定性代码判定。"}
+  </script></div>
+
+  <h2><span class="sec-no">10</span>延伸阅读与回顾</h2>
+  <ul>
+    <li><b>首选原始资料</b>：<a href="../../MAIC.md">MAIC.md</a> §3.2.1（认知学生建模）、§5.1–5.2（行为分析与 MsgNum/MsgLen）——对照本课看论文宣称了什么、开源缺了什么。</li>
+    <li><b>速查表</b>：<a href="../reference/pbl-engagement-events.html">reference/pbl-engagement-events.html</a>（事件总表 + 计分表 + 文件索引，适合打印）。</li>
+    <li><b>源码自读路线</b>：<code>schemas.ts:62-91</code> → <code>instructor.ts:1423-1470</code> → <code>kernel/engagement.ts:67-153</code> → <code>proficiency.ts:484-522,711-726</code>，半小时可走完一条事件的一生。</li>
+  </ul>
+  <div class="callout insight"><span class="tag good">随时提问</span>我是你的老师——任何一处不清楚（比如"EWMA 为什么选 α=0.2"、"为什么不给 signature 做枚举"），直接问，我可以带你回源码里找答案。</div>
+
+  <div class="lesson-nav">
+    <span>本课是第 1 课</span>
+    <span>速查：<a href="../reference/pbl-engagement-events.html">事件总表</a></span>
+    <span><a href="../../MISSION.md">MISSION</a> · <a href="../../RESOURCES.md">RESOURCES</a></span>
+  </div>
+</div>
+<script src="../assets/teach/quiz.js"></script>
+</body>
+</html>
