@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, createElement, createRef } from 'react';
+import { act, createElement, createRef, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -197,48 +197,24 @@ vi.mock('@/components/roundtable', async () => {
   return {
     Roundtable: (props: Record<string, unknown>) => {
       mocks.roundtableProps = props;
-      const pill = props.elementReferencePill as
-        | { sceneLabel: string; displaySummary: string; elementType: string }
-        | undefined;
-      return React.createElement(
-        'div',
-        null,
-        props.showElementReference
-          ? React.createElement(
-              'button',
-              {
-                type: 'button',
-                'data-testid': 'toggle-pick',
-                onClick: () => (props.onToggleElementPick as (() => void) | undefined)?.(),
-              },
-              'toggle pick',
-            )
-          : null,
-        React.createElement(
-          'button',
-          {
-            type: 'button',
-            'data-testid': 'send',
-            onClick: () =>
-              (props.onMessageSend as ((message: string) => void) | undefined)?.('Explain this'),
-          },
-          'send',
-        ),
-        pill
-          ? React.createElement(
-              'div',
-              { 'data-testid': 'owner-pill' },
-              `${pill.sceneLabel} · ${pill.elementType} · ${pill.displaySummary}`,
-            )
-          : null,
-      );
+      return props.showElementReference
+        ? React.createElement(
+            'button',
+            {
+              type: 'button',
+              'data-testid': 'toggle-pick',
+              onClick: () => (props.onToggleElementPick as (() => void) | undefined)?.(),
+            },
+            'toggle pick',
+          )
+        : null;
     },
   };
 });
 vi.mock('@/components/chat/chat-area', async () => {
   const React = await import('react');
   return {
-    ChatArea: React.forwardRef(function MockChatArea(_props, ref) {
+    ChatArea: React.forwardRef(function MockChatArea(props: Record<string, unknown>, ref) {
       React.useImperativeHandle(ref, () => ({
         sendMessage: mocks.sendMessage,
         endActiveSession: vi.fn().mockResolvedValue(undefined),
@@ -256,8 +232,32 @@ vi.mock('@/components/chat/chat-area', async () => {
         pauseBuffer: vi.fn(),
         resumeBuffer: vi.fn(),
         resumeActiveSession: vi.fn(),
+        requestComposer: vi.fn(),
+        composerState: () => ({ focused: false, recording: false }),
       }));
-      return null;
+      // The student's words and the receipt they will be sent with both belong
+      // to the composer, so this mock stands in for the whole lower panel.
+      return React.createElement(
+        'div',
+        null,
+        React.createElement(
+          'button',
+          {
+            type: 'button',
+            'data-testid': 'send',
+            onClick: () =>
+              (props.onComposerSubmit as ((message: string) => void) | undefined)?.('Explain this'),
+          },
+          'send',
+        ),
+        (props.elementReferencePill as ReactNode)
+          ? React.createElement(
+              'div',
+              { 'data-testid': 'owner-pill' },
+              props.elementReferencePill as ReactNode,
+            )
+          : null,
+      );
     }),
   };
 });
@@ -431,8 +431,8 @@ describe('PlaybackChromeRoot element-reference ownership', () => {
     click('toggle-pick');
     expect(mocks.canvasProps?.elementPickActive).toBe(true);
     click('pick-text');
-    expect(container.querySelector('[data-testid="owner-pill"]')?.textContent).toContain(
-      'Page 1 · Text · First grounded fact',
+    expect(container.querySelector('[data-testid="owner-pill"]')?.textContent).toMatch(
+      /Page 1 · Text ·\s*First grounded fact/u,
     );
 
     click('send');
@@ -464,8 +464,8 @@ describe('PlaybackChromeRoot element-reference ownership', () => {
       onPickElement(shapeElement);
     });
 
-    expect(container.querySelector('[data-testid="owner-pill"]')?.textContent).toContain(
-      'Page 1 · Text · First grounded fact',
+    expect(container.querySelector('[data-testid="owner-pill"]')?.textContent).toMatch(
+      /Page 1 · Text ·\s*First grounded fact/u,
     );
     click('send');
     expect(mocks.sendMessage).toHaveBeenCalledWith(
@@ -500,8 +500,8 @@ describe('PlaybackChromeRoot element-reference ownership', () => {
       ),
     );
 
-    expect(container.querySelector('[data-testid="owner-pill"]')?.textContent).toContain(
-      'Page 1 · Shape · No text',
+    expect(container.querySelector('[data-testid="owner-pill"]')?.textContent).toMatch(
+      /Page 1 · Shape ·\s*No text/u,
     );
   });
 
@@ -607,8 +607,8 @@ describe('PlaybackChromeRoot element-reference ownership', () => {
         }),
       ).toBe(false);
     });
-    expect(container.querySelector('[data-testid="owner-pill"]')?.textContent).toContain(
-      'Page 1 · Interactive · #angle-slider',
+    expect(container.querySelector('[data-testid="owner-pill"]')?.textContent).toMatch(
+      /Page 1 · Interactive ·\s*#angle-slider/u,
     );
     expect(pickerStates).toContainEqual({
       sceneId: interactiveScene.id,

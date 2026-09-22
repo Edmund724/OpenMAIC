@@ -38,7 +38,7 @@ describe('ChatSessionComponent markup contract', () => {
     expect(html).toContain('first line\nsecond line');
   });
 
-  it('renders separate stop and continue controls during soft-closing', () => {
+  it('leaves stop and continue to the status bar, not the transcript', () => {
     const session: ChatSession = {
       id: 'session-1',
       type: 'qa',
@@ -54,16 +54,11 @@ describe('ChatSessionComponent markup contract', () => {
     };
 
     const html = renderToStaticMarkup(
-      createElement(ChatSessionComponent, {
-        session,
-        isActive: true,
-        onEndSession: vi.fn(),
-        onContinueSession: vi.fn(),
-      }),
+      createElement(ChatSessionComponent, { session, isActive: true }),
     );
 
-    expect(html).toContain('chat.endQA');
-    expect(html).toContain('chat.softClosing');
+    expect(html).not.toContain('chat.endQA');
+    expect(html).not.toContain('chat.softClosing');
     expect(html).not.toContain('animate-ping');
   });
 });

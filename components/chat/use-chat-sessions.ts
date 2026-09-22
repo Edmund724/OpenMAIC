@@ -2,7 +2,7 @@
 
 import { sampleInteractiveState } from '@/lib/interactive/chat-observation';
 
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import {
   nextChatUpdatedAt,
   withChatSegmentReveal,
@@ -39,6 +39,8 @@ import {
 import { toast } from 'sonner';
 import { createLogger } from '@/lib/logger';
 import { isPiChatEnabled } from '@/lib/config/feature-flags';
+import { loadDisplaySession, saveDisplaySession } from '@/lib/chat/display-session';
+import { sanitizeSessionTitleText } from '@/lib/workbench/session-title';
 import type { CleanupSource } from '@/lib/playback/auto-resume';
 import { nanoid } from 'nanoid';
 import type { BaiduSubSources, WebSearchProviderId } from '@/lib/web-search/types';
@@ -314,6 +316,37 @@ export function isOpenLiveSession(session: Pick<ChatSession, 'type' | 'status'>)
   );
 }
 
+/** The longest conversation title derived from a first message. */
+const DERIVED_TITLE_MAX_LENGTH = 40;
+
+/**
+ * A conversation is named by its own first question, shortened to one row.
+ * Whitespace collapses so a pasted outline still reads as a title, and the cut
+ * never lands inside a surrogate pair.
+ */
+export function deriveSessionTitle(firstUserText: string): string {
+  const collapsed = sanitizeSessionTitleText(firstUserText).replace(/\s+/gu, ' ').trim();
+  if (!collapsed) return '';
+  if (collapsed.length <= DERIVED_TITLE_MAX_LENGTH) return collapsed;
+  const truncated = collapsed.slice(0, DERIVED_TITLE_MAX_LENGTH);
+  const last = truncated.charCodeAt(truncated.length - 1);
+  return `${last >= 0xd800 && last <= 0xdbff ? truncated.slice(0, -1) : truncated}…`;
+}
+
+/**
+ * Where the panel looks when the stored pointer no longer names a showable
+ * conversation: the newest one. Lectures are engine output that never takes the
+ * panel, so they are not candidates.
+ */
+export function pickDisplayFallback(sessions: ChatSession[]): string | null {
+  let newest: ChatSession | null = null;
+  for (const session of sessions) {
+    if (!isLiveSessionType(session)) continue;
+    if (!newest || session.createdAt >= newest.createdAt) newest = session;
+  }
+  return newest?.id ?? null;
+}
+
 export function resumeSoftClosingSessionForFollowUp(
   session: ChatSession,
   userMessage: UIMessage<ChatMessageMetadata>,
@@ -562,7 +595,20 @@ export function useChatSessions(options: UseChatSessionsOptions = {}) {
     return normalizeStoredSessionsForRestore(stored);
   });
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
-  const [expandedSessionIds, setExpandedSessionIds] = useState<Set<string>>(new Set());
+  // Which conversation the panel is showing — the student's own pointer, kept
+  // apart from `activeSessionId` (what the engine is advancing).
+  const [displaySessionId, setDisplaySessionIdState] = useState<string | null>(null);
+  // Engine writes the student has not looked at yet.
+  const [unreadSessionIds, setUnreadSessionIds] = useState<ReadonlySet<string>>(() => new Set());
+  // One draft per conversation, so switching segments never loses what was typed.
+  const [composerDrafts, setComposerDrafts] = useState<ReadonlyMap<string, string>>(() => new Map());
+  const displaySessionIdRef = useRef<string | null>(null);
+  // True from a stage change until that stage's stored pointer has been read: a
+  // restore is not a move, so it must never write itself back.
+  const displayRestorePendingRef = useRef(true);
+  // Drops a slower restore for a stage the panel has already left.
+  const restoreDisplayCancelledRef = useRef<(() => void) | null>(null);
+  const displaySeededRef = useRef(false);
   const [isStreaming, setIsStreaming] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
   const streamingSessionIdRef = useRef<string | null>(null);
@@ -587,6 +633,61 @@ export function useChatSessions(options: UseChatSessionsOptions = {}) {
     endReason?: string;
   } | null>(null);
 
+  /**
+   * The student's move: look at this conversation and mark it read. Used by
+   * the history overlay, by sending, and by a restore — a restore goes through
+   * it too because a fresh stage carries no unread state to keep.
+   */
+  const applyDisplaySessionId = useCallback((id: string | null) => {
+    displaySessionIdRef.current = id;
+    setDisplaySessionIdState(id);
+    if (!id) return;
+    setUnreadSessionIds((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+  }, []);
+
+  /**
+   * Settle which conversation the panel shows once this stage's stored pointer
+   * has been read. A pointer that no longer names a showable conversation falls
+   * back to the newest one, and an empty stage falls back to nothing.
+   */
+  const restoreDisplaySession = useCallback(
+    (stage: string | null, candidates: ChatSession[]) => {
+      displayRestorePendingRef.current = true;
+      restoreDisplayCancelledRef.current?.();
+      if (!stage) {
+        displayRestorePendingRef.current = false;
+        applyDisplaySessionId(null);
+        return;
+      }
+      let cancelled = false;
+      restoreDisplayCancelledRef.current = () => {
+        cancelled = true;
+      };
+      const settle = (stored: string | null) => {
+        if (cancelled) return;
+        const showable = stored
+          ? candidates.some((session) => session.id === stored && isLiveSessionType(session))
+          : false;
+        displayRestorePendingRef.current = false;
+        applyDisplaySessionId(showable ? stored : pickDisplayFallback(candidates));
+      };
+      void loadDisplaySession(stage).then(settle, () => settle(null));
+    },
+    [applyDisplaySessionId],
+  );
+
+  // Where the panel looks when the stage first arrives.
+  useEffect(() => {
+    if (displaySeededRef.current) return;
+    displaySeededRef.current = true;
+    restoreDisplaySession(stageId ?? null, sessionsRef.current);
+  }, [restoreDisplaySession, stageId]);
+
   // Reload sessions when stage changes (course switch)
   // This synchronous setState is intentional: it resets derived state from
   // an external store (IndexedDB) when the stageId dependency changes.
@@ -598,12 +699,28 @@ export function useChatSessions(options: UseChatSessionsOptions = {}) {
     softCloseLifecycleRef.current.clear();
     // Stage changed — reload sessions from store (already populated by loadFromStorage)
     const stored = useStageStore.getState().chats;
-    setSessions(normalizeStoredSessionsForRestore(stored));
+    const restored = normalizeStoredSessionsForRestore(stored);
+    setSessions(restored);
     setActiveSessionId(null);
-    setExpandedSessionIds(new Set());
+    setUnreadSessionIds(new Set());
+    setComposerDrafts(new Map());
+    restoreDisplaySession(stageId ?? null, restored);
     previousLiveSessionRef.current = undefined;
     piSessionBoundariesRef.current.clear();
-  }, [stageId]);
+  }, [restoreDisplaySession, stageId]);
+
+  // Write the pointer through for the stage it belongs to. Never the key of a
+  // stage we have already left, and never as part of a restore. A "new
+  // conversation" (no pointer) is not persisted: the stored pointer simply
+  // keeps naming the last conversation this device looked at.
+  useEffect(() => {
+    if (displayRestorePendingRef.current) return;
+    const stage = stageIdRef.current;
+    if (!stage || displaySessionId === null) return;
+    void saveDisplaySession(stage, displaySessionId).catch((error) => {
+      log.warn('Failed to save the displayed chat session', error);
+    });
+  }, [displaySessionId]);
 
   useEffect(() => {
     if (currentSceneId === currentSceneIdRef.current) return;
@@ -886,17 +1003,44 @@ export function useChatSessions(options: UseChatSessionsOptions = {}) {
   // Tracks last action index per lecture session (avoids stale closure reads)
   const lectureLastActionIndexRef = useRef<Map<string, number>>(new Map());
 
-  const toggleSessionExpand = useCallback((sessionId: string) => {
-    setExpandedSessionIds((prev) => {
+  /** An engine write the student is not looking at is news. */
+  const markSessionUnread = useCallback((sessionId: string) => {
+    if (displaySessionIdRef.current === sessionId) return;
+    setUnreadSessionIds((prev) => {
+      if (prev.has(sessionId)) return prev;
       const next = new Set(prev);
-      if (next.has(sessionId)) {
-        next.delete(sessionId);
-      } else {
-        next.add(sessionId);
-      }
+      next.add(sessionId);
       return next;
     });
   }, []);
+
+  /** Rename is the one edit a conversation supports. */
+  const renameSession = useCallback((sessionId: string, title: string) => {
+    const trimmed = sanitizeSessionTitleText(title).trim();
+    if (!trimmed) return;
+    setSessions((prev) =>
+      prev.map((session) =>
+        session.id === sessionId && session.title !== trimmed
+          ? { ...session, title: trimmed, updatedAt: nextChatUpdatedAt(session) }
+          : session,
+      ),
+    );
+  }, []);
+
+  const composerDraftsApi = useMemo(
+    () => ({
+      get: (id: string) => composerDrafts.get(id) ?? '',
+      set: (id: string, text: string) => {
+        setComposerDrafts((prev) => {
+          const next = new Map(prev);
+          if (text) next.set(id, text);
+          else next.delete(id);
+          return next;
+        });
+      },
+    }),
+    [composerDrafts],
+  );
 
   /**
    * Create a StreamBuffer for a session and wire its callbacks to React state.
@@ -917,6 +1061,7 @@ export function useChatSessions(options: UseChatSessionsOptions = {}) {
         {
           onAgentStart(data: AgentStartItem) {
             const now = Date.now();
+            markSessionUnread(sessionId);
             const agentConfig = useAgentRegistry.getState().getAgent(data.agentId);
             const newMsg: UIMessage<ChatMessageMetadata> = {
               id: data.messageId,
@@ -945,6 +1090,7 @@ export function useChatSessions(options: UseChatSessionsOptions = {}) {
           },
 
           onAgentEnd() {
+            markSessionUnread(sessionId);
             // Remove empty assistant messages (agent started but produced no content)
             setSessions((prev) =>
               prev.map((s) => {
@@ -965,6 +1111,7 @@ export function useChatSessions(options: UseChatSessionsOptions = {}) {
             revealedText: string,
             isComplete: boolean,
           ) {
+            markSessionUnread(sessionId);
             setSessions((prev) =>
               prev.map((s) => {
                 if (s.id !== sessionId) return s;
@@ -1000,6 +1147,7 @@ export function useChatSessions(options: UseChatSessionsOptions = {}) {
           },
 
           async onActionReady(messageId: string, data: ActionItem, signal: AbortSignal) {
+            markSessionUnread(sessionId);
             const actionPart = {
               type: `action-${data.actionName}`,
               actionId: data.actionId,
@@ -1123,7 +1271,7 @@ export function useChatSessions(options: UseChatSessionsOptions = {}) {
 
       return buffer;
     },
-    [],
+    [markSessionUnread],
   );
 
   const createStatelessStreamConsumer = useCallback(
@@ -1302,6 +1450,7 @@ export function useChatSessions(options: UseChatSessionsOptions = {}) {
           model: requestTemplate.model,
           providerType: requestTemplate.providerType,
           thinkingConfig: requestTemplate.thinkingConfig,
+          directorState: requestTemplate.directorState,
         },
         {
           getStoreState: buildFreshAgentLoopStoreState,
@@ -1399,7 +1548,6 @@ export function useChatSessions(options: UseChatSessionsOptions = {}) {
 
       setSessions((prev) => [...prev, newSession]);
       setActiveSessionId(sessionId);
-      setExpandedSessionIds((prev) => new Set([...prev, sessionId]));
 
       log.info(`[ChatArea] Created session: ${sessionId} (${type})`);
       return sessionId;
@@ -1730,11 +1878,11 @@ export function useChatSessions(options: UseChatSessionsOptions = {}) {
   }, [resumeSession]);
 
   /**
-   * Send a message to the active session
+   * Send a message into the conversation the student is looking at.
    */
   const sendMessage = useCallback(
     async (content: string, options: ChatMessageSendOptions = {}): Promise<void> => {
-      let sessionId = activeSessionId;
+      let sessionId = displaySessionIdRef.current;
 
       // Interrupt active generation: abort stream and append "..." to the last agent message
       if (abortControllerRef.current) {
@@ -1789,30 +1937,52 @@ export function useChatSessions(options: UseChatSessionsOptions = {}) {
         return;
       }
 
-      // Create a new session when there's no active QA session to append to.
-      // A completed session should NOT be reused — start a fresh one instead.
-      const activeSession = sessionsRef.current.find((s) => s.id === sessionId);
-      const needNewSession =
-        !sessionId || activeSession?.type === 'lecture' || activeSession?.status === 'completed';
+      // Where the message lands: the conversation on screen. A finished one is
+      // revived rather than replaced — continuing a segment continues that
+      // segment, with its own director state. A lecture never takes the panel,
+      // so asking while one is on screen starts a fresh conversation.
+      const landingSession = sessionsRef.current.find((s) => s.id === sessionId);
+      const revivesCompleted =
+        !!landingSession &&
+        landingSession.type !== 'lecture' &&
+        landingSession.status === 'completed';
+      const needNewSession = !sessionId || landingSession?.type === 'lecture';
+      const derivedTitle = deriveSessionTitle(content) || t('chat.badge.qa');
 
-      if (needNewSession) {
-        // End all active QA/Discussion sessions before creating new one
+      if (needNewSession || revivesCompleted) {
+        // Only one live conversation at a time: end the others before taking over.
         const activeQAOrDiscussion = sessionsRef.current.filter(isOpenLiveSession);
         for (const session of activeQAOrDiscussion) {
           await endSession(session.id);
         }
-        sessionId = await createSession('qa', 'Q&A');
-      } else if (sessionId && activeSession?.status === 'soft-closing') {
+        if (revivesCompleted) {
+          const revivedSessionId = sessionId!;
+          setSessions((prev) =>
+            prev.map((s) =>
+              s.id === revivedSessionId ? withChatSessionStatus(s, 'active') : s,
+            ),
+          );
+        } else {
+          sessionId = await createSession('qa', derivedTitle);
+        }
+      } else if (sessionId && landingSession?.status === 'soft-closing') {
         if (claimSoftCloseRegistration(sessionId)) {
           softCloseLifecycleRef.current.set(sessionId, 'active');
         } else {
           const lifecycle = softCloseLifecycleRef.current.get(sessionId);
           if (lifecycle === 'completed') {
-            sessionId = await createSession('qa', 'Q&A');
+            sessionId = await createSession('qa', derivedTitle);
           } else if (lifecycle !== 'active') {
             return;
           }
         }
+      }
+
+      // The student's own move: the conversation being advanced is the one on
+      // screen, and it is read by definition.
+      if (sessionId) {
+        applyDisplaySessionId(sessionId);
+        setActiveSessionId(sessionId);
       }
 
       const controller = new AbortController();
@@ -1858,7 +2028,7 @@ export function useChatSessions(options: UseChatSessionsOptions = {}) {
           const newSession: ChatSession = {
             id: sessionId!,
             type: 'qa',
-            title: 'Q&A',
+            title: derivedTitle,
             status: 'active',
             messages: [userMessage],
             config: {
@@ -1929,7 +2099,7 @@ export function useChatSessions(options: UseChatSessionsOptions = {}) {
       }
     },
     [
-      activeSessionId,
+      applyDisplaySessionId,
       clearLiveSessionAfterError,
       createSession,
       endSession,
@@ -2005,7 +2175,8 @@ export function useChatSessions(options: UseChatSessionsOptions = {}) {
 
       setSessions((prev) => [...prev, newSession]);
       setActiveSessionId(sessionId);
-      setExpandedSessionIds((prev) => new Set([...prev, sessionId]));
+      // The student asked for this discussion — it takes the panel.
+      applyDisplaySessionId(sessionId);
 
       const controller = new AbortController();
       abortControllerRef.current = controller;
@@ -2106,7 +2277,6 @@ export function useChatSessions(options: UseChatSessionsOptions = {}) {
           }
         }
         setActiveSessionId(existing.id);
-        setExpandedSessionIds((prev) => new Set([...prev, existing.id]));
         return existing.id;
       }
 
@@ -2154,7 +2324,6 @@ export function useChatSessions(options: UseChatSessionsOptions = {}) {
 
       setSessions((prev) => [...prev, newSession]);
       setActiveSessionId(sessionId);
-      setExpandedSessionIds((prev) => new Set([...prev, sessionId]));
 
       log.info(`[ChatArea] Created lecture session: ${sessionId} for scene ${sceneId}`);
       return sessionId;
@@ -2178,6 +2347,7 @@ export function useChatSessions(options: UseChatSessionsOptions = {}) {
       lectureLastActionIndexRef.current.set(sessionId, actionIndex);
 
       // Update lastActionIndex in session
+      markSessionUnread(sessionId);
       setSessions((prev) =>
         prev.map((s) =>
           s.id === sessionId
@@ -2221,7 +2391,7 @@ export function useChatSessions(options: UseChatSessionsOptions = {}) {
         });
       }
     },
-    [createBufferForSession],
+    [createBufferForSession, markSessionUnread],
   );
 
   // Derive active session type for external consumers
@@ -2270,7 +2440,11 @@ export function useChatSessions(options: UseChatSessionsOptions = {}) {
     sessions,
     activeSessionId,
     activeSessionType,
-    expandedSessionIds,
+    displaySessionId,
+    setDisplaySessionId: applyDisplaySessionId,
+    unreadSessionIds,
+    renameSession,
+    composerDrafts: composerDraftsApi,
     isStreaming,
     createSession,
     endSession,
@@ -2283,7 +2457,6 @@ export function useChatSessions(options: UseChatSessionsOptions = {}) {
     startDiscussion,
     startLecture,
     addLectureMessage,
-    toggleSessionExpand,
     handleInterrupt,
     getLectureMessageId,
     pauseBuffer,

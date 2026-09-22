@@ -170,6 +170,32 @@
       "qa": "HỎI ĐÁP",
       "discussion": "THẢO LUẬN",
       "lecture": "GIẢNG"
+    },
+    "history": {
+      "open": "Lịch sử trò chuyện",
+      "title": "Các cuộc trò chuyện",
+      "newTalk": "Cuộc trò chuyện mới",
+      "rename": "Đổi tên",
+      "renamePlaceholder": "Tên cuộc trò chuyện",
+      "today": "Hôm nay",
+      "yesterday": "Hôm qua",
+      "earlier": "Trước đó",
+      "empty": "Chưa có cuộc trò chuyện"
+    },
+    "status": {
+      "answering": "Đang trả lời…",
+      "stop": "Dừng",
+      "softClosing": "Cuộc thảo luận này sẽ kết thúc sau {{seconds}} giây",
+      "otherRunning": "Đang có cuộc thảo luận khác diễn ra",
+      "back": "Quay lại"
+    },
+    "stream": {
+      "newContent": "Có nội dung mới ↓"
+    },
+    "composer": {
+      "send": "Gửi",
+      "voice": "Giọng nói",
+      "voiceHint": "Nhập bằng giọng nói (V)"
     }
   },
   "actions": {

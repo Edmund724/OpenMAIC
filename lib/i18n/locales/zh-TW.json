@@ -170,6 +170,32 @@
       "qa": "Q&A",
       "discussion": "討論",
       "lecture": "授課"
+    },
+    "history": {
+      "open": "對話歷史",
+      "title": "歷史對話",
+      "newTalk": "新對話",
+      "rename": "重新命名",
+      "renamePlaceholder": "對話名稱",
+      "today": "今天",
+      "yesterday": "昨天",
+      "earlier": "更早",
+      "empty": "還沒有對話"
+    },
+    "status": {
+      "answering": "正在回答…",
+      "stop": "停止",
+      "softClosing": "這段討論還有 {{seconds}} 秒結束",
+      "otherRunning": "另一端還有討論在進行",
+      "back": "返回"
+    },
+    "stream": {
+      "newContent": "有新內容 ↓"
+    },
+    "composer": {
+      "send": "發送",
+      "voice": "說話",
+      "voiceHint": "語音輸入（V）"
     }
   },
   "actions": {

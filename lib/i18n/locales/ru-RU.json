@@ -170,6 +170,32 @@
       "qa": "Вопросы",
       "discussion": "ДИСКУС",
       "lecture": "ЛЕКЦ"
+    },
+    "history": {
+      "open": "История диалогов",
+      "title": "Диалоги",
+      "newTalk": "Новый диалог",
+      "rename": "Переименовать",
+      "renamePlaceholder": "Название диалога",
+      "today": "Сегодня",
+      "yesterday": "Вчера",
+      "earlier": "Ранее",
+      "empty": "Диалогов пока нет"
+    },
+    "status": {
+      "answering": "Отвечает…",
+      "stop": "Остановить",
+      "softClosing": "Обсуждение завершится через {{seconds}} с",
+      "otherRunning": "Идёт другое обсуждение",
+      "back": "Назад"
+    },
+    "stream": {
+      "newContent": "Новое содержимое ↓"
+    },
+    "composer": {
+      "send": "Отправить",
+      "voice": "Голос",
+      "voiceHint": "Голосовой ввод (V)"
     }
   },
   "actions": {

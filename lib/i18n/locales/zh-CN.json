@@ -170,6 +170,32 @@
       "qa": "Q&A",
       "discussion": "讨论",
       "lecture": "授课"
+    },
+    "history": {
+      "open": "对话历史",
+      "title": "历史对话",
+      "newTalk": "新对话",
+      "rename": "改名",
+      "renamePlaceholder": "对话名称",
+      "today": "今天",
+      "yesterday": "昨天",
+      "earlier": "更早",
+      "empty": "还没有对话"
+    },
+    "status": {
+      "answering": "正在回答…",
+      "stop": "停止",
+      "softClosing": "这段讨论还有 {{seconds}}s 结束",
+      "otherRunning": "另一端还有讨论在进行",
+      "back": "回去"
+    },
+    "stream": {
+      "newContent": "有新内容 ↓"
+    },
+    "composer": {
+      "send": "发送",
+      "voice": "说话",
+      "voiceHint": "语音输入（V）"
     }
   },
   "actions": {

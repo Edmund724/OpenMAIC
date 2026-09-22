@@ -60,6 +60,8 @@ export interface AgentLoopRequest {
   model?: string;
   providerType?: string;
   thinkingConfig?: ThinkingConfig;
+  /** Director state to resume from — a conversation picked up where it stopped. */
+  directorState?: DirectorState;
 }
 
 /** Per-iteration outcome extracted from the done event */
@@ -156,7 +158,7 @@ export async function runAgentLoop(
   callbacks: AgentLoopCallbacks,
   signal: AbortSignal,
 ): Promise<AgentLoopOutcome> {
-  let directorState: DirectorState | undefined = undefined;
+  let directorState: DirectorState | undefined = request.directorState;
   let turnCount = 0;
   let consecutiveEmptyTurns = 0;
 

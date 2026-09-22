@@ -161,6 +161,10 @@ test('the global courseware entry selects one scaled source-authored component a
     iframeBox!.y + (sliderRect.top + sliderRect.height / 2) * scaleY,
   );
 
+  // The receipt renders inside the composer now, so the chat tab has to be open;
+  // the pick left focus inside the iframe, so return it first.
+  await page.getByRole('heading', { name: 'Slider experiment' }).click();
+  await page.keyboard.press('T');
   const pill = page.getByTestId('slide-element-reference-pill');
   await expect(pill).toBeVisible();
   await expect(pill).toContainText('Interactive');

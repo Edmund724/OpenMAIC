@@ -1,16 +1,18 @@
 'use client';
 
-import { useEffect, useRef, useCallback, memo } from 'react';
+import { useEffect, useRef, useCallback, useState, memo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import type { ChatSession, ChatMessageMetadata } from '@/lib/types/chat';
 import type { UIMessage } from 'ai';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/hooks/use-i18n';
 import { AvatarDisplay } from '@/components/ui/avatar-display';
-import { CircleStop, MessageCircleMore } from 'lucide-react';
+import { CircleStop } from 'lucide-react';
 import { InlineActionTag } from './inline-action-tag';
 import { useUserProfileStore } from '@/lib/store/user-profile';
-import { useSoftCloseCountdown } from './use-soft-close-countdown';
+
+/** Distance from the bottom that still counts as following the stream. */
+const FOLLOW_THRESHOLD_PX = 24;
 
 /** Extended message part type covering standard + custom action parts */
 interface MessagePart {
@@ -26,8 +28,6 @@ interface ChatSessionProps {
   readonly isActive: boolean;
   readonly isStreaming?: boolean;
   readonly activeBubbleId?: string | null;
-  readonly onEndSession?: (sessionId: string) => void;
-  readonly onContinueSession?: (sessionId: string) => void;
 }
 
 const AVATARS = {
@@ -161,8 +161,6 @@ export function ChatSessionComponent({
   isActive,
   isStreaming,
   activeBubbleId,
-  onEndSession,
-  onContinueSession,
 }: ChatSessionProps) {
   const { t } = useI18n();
   const userProfileAvatar = useUserProfileStore((s) => s.avatar);
@@ -171,34 +169,50 @@ export function ChatSessionComponent({
   const activeBubbleRef = useRef<HTMLDivElement>(null);
   const isDiscussion = session.type === 'discussion';
   const isQA = session.type === 'qa';
-  const canEnd =
-    (isDiscussion || isQA) && (session.status === 'active' || session.status === 'soft-closing');
   const isEnded = session.status === 'completed' && (isDiscussion || isQA);
-  const isSoftClosing = session.status === 'soft-closing' && (isDiscussion || isQA);
-  const remainingSoftCloseSeconds = useSoftCloseCountdown(session.softCloseDeadline);
 
-  // Track whether user is at the bottom of the scroll container.
-  // When user scrolls up to read history, auto-scroll is suppressed.
+  // Follow the stream only while the student is at the bottom. Having scrolled
+  // up means they are reading, so new text waits behind a pill instead.
   const isAtBottomRef = useRef(true);
+  const [hasNewContent, setHasNewContent] = useState(false);
+
   const handleScroll = useCallback(() => {
     const el = scrollContainerRef.current;
     if (!el) return;
-    isAtBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < FOLLOW_THRESHOLD_PX;
+    isAtBottomRef.current = atBottom;
+    if (atBottom) setHasNewContent(false);
   }, []);
 
-  // Auto-scroll: smooth scroll when a NEW message arrives — always (new agent bubble should be visible)
+  const scrollToBottom = useCallback(() => {
+    const el = scrollContainerRef.current;
+    isAtBottomRef.current = true;
+    setHasNewContent(false);
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  }, []);
+
+  // Auto-scroll: smooth scroll when a NEW message arrives — but only for a
+  // reader who is following along.
   const msgCount = session.messages.length;
   useEffect(() => {
-    if (bottomRef.current) {
-      bottomRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
-      isAtBottomRef.current = true;
+    if (!isAtBottomRef.current) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- content arrived while the student was reading further up
+      setHasNewContent(true);
+      return;
     }
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }, [msgCount]);
 
-  // Auto-scroll: rAF-throttled instant scroll as text grows — only when user is at bottom
+  // Auto-scroll: rAF-throttled instant scroll as text grows — only when the
+  // student is at the bottom; otherwise the growth is news.
   const scrollRaf = useRef(0);
   useEffect(() => {
-    if (!isAtBottomRef.current) return;
+    if (!isAtBottomRef.current) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- content arrived while the student was reading further up
+      setHasNewContent(true);
+      return;
+    }
     cancelAnimationFrame(scrollRaf.current);
     scrollRaf.current = requestAnimationFrame(() => {
       const el = scrollContainerRef.current;
@@ -225,15 +239,13 @@ export function ChatSessionComponent({
     );
   }
 
-  // Button text based on session type
-  const endButtonText = isDiscussion ? t('chat.stopDiscussion') : t('chat.endQA');
-
   return (
-    <div className="flex flex-col">
+    <div className="relative flex flex-col h-full min-h-0">
       {/* Messages */}
       <div
         ref={scrollContainerRef}
         onScroll={handleScroll}
+        data-testid="chat-transcript"
         className="space-y-1 overflow-y-auto scrollbar-hide"
       >
         {session.messages.map((message, msgIdx) => {
@@ -349,39 +361,17 @@ export function ChatSessionComponent({
         <div ref={bottomRef} />
       </div>
 
-      {/* Session controls for Q&A and Discussion */}
-      <AnimatePresence>
-        {canEnd && onEndSession && (
-          <motion.div
-            initial={{ opacity: 0, y: 5 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 5 }}
-            className="mt-2 mx-2 flex flex-wrap items-center justify-center gap-1.5"
-          >
-            <button
-              onClick={() => onEndSession(session.id)}
-              className="h-7 bg-red-50/80 dark:bg-red-900/20 text-red-600 dark:text-red-400 border border-red-200/60 dark:border-red-800/50 px-2.5 rounded-md text-[11px] font-semibold flex items-center gap-1.5 transition-colors hover:bg-red-100 dark:hover:bg-red-900/35"
-            >
-              <CircleStop className="size-3" />
-              {endButtonText}
-            </button>
-            {isSoftClosing && onContinueSession && (
-              <button
-                onClick={() => onContinueSession(session.id)}
-                className="h-7 bg-white dark:bg-gray-800 text-purple-600 dark:text-purple-300 border border-purple-200 dark:border-purple-700 px-2.5 rounded-md text-[11px] font-semibold flex items-center gap-1.5 transition-colors hover:bg-purple-50 dark:hover:bg-purple-900/25"
-              >
-                <MessageCircleMore className="size-3" />
-                {t('chat.softClosing')}
-                {remainingSoftCloseSeconds !== undefined && (
-                  <span className="text-[9px] font-medium tabular-nums text-gray-400 dark:text-gray-500">
-                    {remainingSoftCloseSeconds}s
-                  </span>
-                )}
-              </button>
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* New text arrived while the student was reading further up. */}
+      {hasNewContent && (
+        <button
+          type="button"
+          data-testid="chat-new-content"
+          onClick={scrollToBottom}
+          className="absolute bottom-3 left-1/2 z-10 -translate-x-1/2 rounded-full bg-gray-800/90 dark:bg-gray-600/90 px-3 py-1 text-[11px] font-medium text-white shadow-lg backdrop-blur transition-colors hover:bg-gray-900 dark:hover:bg-gray-500"
+        >
+          {t('chat.stream.newContent')}
+        </button>
+      )}
     </div>
   );
 }

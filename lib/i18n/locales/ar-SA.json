@@ -170,6 +170,32 @@
       "qa": "أسئلة",
       "discussion": "نقاش",
       "lecture": "محاضرة"
+    },
+    "history": {
+      "open": "سجل المحادثات",
+      "title": "المحادثات",
+      "newTalk": "محادثة جديدة",
+      "rename": "إعادة تسمية",
+      "renamePlaceholder": "اسم المحادثة",
+      "today": "اليوم",
+      "yesterday": "أمس",
+      "earlier": "سابقًا",
+      "empty": "لا توجد محادثات بعد"
+    },
+    "status": {
+      "answering": "جارٍ الرد…",
+      "stop": "إيقاف",
+      "softClosing": "تنتهي هذه المناقشة خلال {{seconds}} ثانية",
+      "otherRunning": "هناك مناقشة أخرى جارية",
+      "back": "العودة"
+    },
+    "stream": {
+      "newContent": "محتوى جديد ↓"
+    },
+    "composer": {
+      "send": "إرسال",
+      "voice": "الصوت",
+      "voiceHint": "إدخال صوتي (V)"
     }
   },
   "actions": {

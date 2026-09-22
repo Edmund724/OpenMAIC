@@ -73,9 +73,24 @@ function storedIds(): string[] {
   return useStageStore.getState().chats.map((entry) => entry.id);
 }
 
-/** Text rendered inside one host — radix mounts tab content only once its tab is active. */
-function renderedText(host: 'a' | 'b'): string {
-  return container.querySelector(`[data-testid="host-${host}"]`)?.textContent ?? '';
+function hostRoot(host: 'a' | 'b'): HTMLElement | null {
+  return container.querySelector(`[data-testid="host-${host}"]`);
+}
+
+/**
+ * A host's own conversation list, read out of its history overlay: the panel
+ * shows one conversation at a time now, so the list only exists behind the
+ * history button.
+ */
+function historyText(host: 'a' | 'b'): string {
+  const root = hostRoot(host);
+  const button = root?.querySelector('[data-testid="chat-history-open"]');
+  if (button?.getAttribute('aria-expanded') !== 'true') {
+    act(() => {
+      button?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+  }
+  return root?.querySelector('[data-testid="chat-history-overlay"]')?.textContent ?? '';
 }
 
 function showChatTab(host: 'a' | 'b'): void {
@@ -85,7 +100,7 @@ function showChatTab(host: 'a' | 'b'): void {
 
 beforeEach(async () => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
-  // jsdom has no `scrollIntoView`; the session list scrolls its newest row into view on mount.
+  // jsdom has no `scrollIntoView`; the transcript scrolls its newest message into view on mount.
   Element.prototype.scrollIntoView = vi.fn();
   useStageStore.getState().clearStore();
   useStageStore.setState({
@@ -136,8 +151,8 @@ describe('two coexisting useChatSessions instances', () => {
   it('seeds both instances from useStageStore.chats and both write that list straight back', async () => {
     expect(storedIds()).toEqual([SEED_ID]);
     expect(writes.map((entry) => entry.map((chat) => chat.id))).toEqual([[SEED_ID], [SEED_ID]]);
-    expect(renderedText('a')).toContain('Seed session');
-    expect(renderedText('b')).toContain('Seed session');
+    expect(historyText('a')).toContain('Seed session');
+    expect(historyText('b')).toContain('Seed session');
   });
 
   it('never lets one instance observe the other write: the two session lists diverge', async () => {
@@ -149,8 +164,8 @@ describe('two coexisting useChatSessions instances', () => {
     // A wrote through to the shared store…
     expect(storedIds()).toEqual([SEED_ID, aSessionId]);
     // …but B is still rendering its own, older list.
-    expect(renderedText('a')).toContain('Session A');
-    expect(renderedText('b')).not.toContain('Session A');
+    expect(historyText('a')).toContain('Session A');
+    expect(historyText('b')).not.toContain('Session A');
 
     let bSessionId = '';
     await act(async () => {
@@ -162,8 +177,8 @@ describe('two coexisting useChatSessions instances', () => {
     expect(storedIds()).not.toContain(aSessionId);
     expect(writes.at(-1)?.map((chat) => chat.id)).toEqual([SEED_ID, bSessionId]);
     // A keeps showing the session that just left the persisted list: the two views disagree.
-    expect(renderedText('a')).toContain('Session A');
-    expect(renderedText('b')).toContain('Session B');
+    expect(historyText('a')).toContain('Session A');
+    expect(historyText('b')).toContain('Session B');
   });
 
   it('keeps selection state per instance: activeSessionId does not cross instances', async () => {

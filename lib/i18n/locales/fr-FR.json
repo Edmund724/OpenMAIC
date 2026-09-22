@@ -170,6 +170,32 @@
       "qa": "Q/R",
       "discussion": "DISC",
       "lecture": "COURS"
+    },
+    "history": {
+      "open": "Historique des conversations",
+      "title": "Conversations",
+      "newTalk": "Nouvelle conversation",
+      "rename": "Renommer",
+      "renamePlaceholder": "Nom de la conversation",
+      "today": "Aujourd’hui",
+      "yesterday": "Hier",
+      "earlier": "Plus tôt",
+      "empty": "Aucune conversation pour l’instant"
+    },
+    "status": {
+      "answering": "Réponse en cours…",
+      "stop": "Arrêter",
+      "softClosing": "Cette discussion se termine dans {{seconds}} s",
+      "otherRunning": "Une autre discussion est en cours",
+      "back": "Retour"
+    },
+    "stream": {
+      "newContent": "Nouveau contenu ↓"
+    },
+    "composer": {
+      "send": "Envoyer",
+      "voice": "Voix",
+      "voiceHint": "Saisie vocale (V)"
     }
   },
   "actions": {

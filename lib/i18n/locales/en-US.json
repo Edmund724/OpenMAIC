@@ -170,6 +170,32 @@
       "qa": "Q&A",
       "discussion": "DISC",
       "lecture": "LEC"
+    },
+    "history": {
+      "open": "Conversation history",
+      "title": "Conversations",
+      "newTalk": "New chat",
+      "rename": "Rename",
+      "renamePlaceholder": "Conversation name",
+      "today": "Today",
+      "yesterday": "Yesterday",
+      "earlier": "Earlier",
+      "empty": "No conversations yet"
+    },
+    "status": {
+      "answering": "Answering…",
+      "stop": "Stop",
+      "softClosing": "This discussion ends in {{seconds}}s",
+      "otherRunning": "Another discussion is running",
+      "back": "Go back"
+    },
+    "stream": {
+      "newContent": "New content ↓"
+    },
+    "composer": {
+      "send": "Send",
+      "voice": "Voice",
+      "voiceHint": "Voice input (V)"
     }
   },
   "actions": {

@@ -1,10 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
 
-const { deleteDocument, clearCurrentScene, clearAllForScene } = vi.hoisted(() => ({
-  deleteDocument: vi.fn().mockResolvedValue(undefined),
-  clearCurrentScene: vi.fn().mockResolvedValue(undefined),
-  clearAllForScene: vi.fn(),
-}));
+const { deleteDocument, clearCurrentScene, clearAllForScene, clearDisplaySession } = vi.hoisted(
+  () => ({
+    deleteDocument: vi.fn().mockResolvedValue(undefined),
+    clearCurrentScene: vi.fn().mockResolvedValue(undefined),
+    clearAllForScene: vi.fn(),
+    clearDisplaySession: vi.fn().mockResolvedValue(undefined),
+  }),
+);
+
+vi.mock('@/lib/chat/display-session', () => ({ clearDisplaySession }));
 
 vi.mock('@/lib/document-store', () => ({
   clearCurrentScene,
@@ -99,6 +104,7 @@ describe('deleteStageData runtime cascade', () => {
     expect(vi.mocked(withRuntimeStorageExclusiveLockUntilSettled)).toHaveBeenCalledOnce();
     expect(deleteDocument).toHaveBeenCalledExactlyOnceWith('stage-7');
     expect(clearCurrentScene).toHaveBeenCalledExactlyOnceWith('stage-7');
+    expect(clearDisplaySession).toHaveBeenCalledExactlyOnceWith('stage-7');
     expect(clearAllForScene).toHaveBeenCalledWith('scene-1');
     expect(clearAllForScene).toHaveBeenCalledWith('new-scene');
   });

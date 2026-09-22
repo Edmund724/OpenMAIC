@@ -170,6 +170,32 @@
       "qa": "Q&A",
       "discussion": "토론",
       "lecture": "강의"
+    },
+    "history": {
+      "open": "대화 기록",
+      "title": "대화 목록",
+      "newTalk": "새 대화",
+      "rename": "이름 바꾸기",
+      "renamePlaceholder": "대화 이름",
+      "today": "오늘",
+      "yesterday": "어제",
+      "earlier": "이전",
+      "empty": "아직 대화가 없습니다"
+    },
+    "status": {
+      "answering": "답변 중…",
+      "stop": "중지",
+      "softClosing": "이 토론은 {{seconds}}초 후에 종료됩니다",
+      "otherRunning": "다른 토론이 진행 중입니다",
+      "back": "돌아가기"
+    },
+    "stream": {
+      "newContent": "새 내용 ↓"
+    },
+    "composer": {
+      "send": "보내기",
+      "voice": "음성",
+      "voiceHint": "음성 입력 (V)"
     }
   },
   "actions": {

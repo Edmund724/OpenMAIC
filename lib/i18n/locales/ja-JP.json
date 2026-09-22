@@ -170,6 +170,32 @@
       "qa": "Q&A",
       "discussion": "議論",
       "lecture": "講義"
+    },
+    "history": {
+      "open": "会話履歴",
+      "title": "会話一覧",
+      "newTalk": "新しい会話",
+      "rename": "名前を変更",
+      "renamePlaceholder": "会話名",
+      "today": "今日",
+      "yesterday": "昨日",
+      "earlier": "それ以前",
+      "empty": "会話はまだありません"
+    },
+    "status": {
+      "answering": "回答中…",
+      "stop": "停止",
+      "softClosing": "この議論はあと{{seconds}}秒で終了します",
+      "otherRunning": "別の議論が進行中です",
+      "back": "戻る"
+    },
+    "stream": {
+      "newContent": "新しい内容 ↓"
+    },
+    "composer": {
+      "send": "送信",
+      "voice": "音声",
+      "voiceHint": "音声入力（V）"
     }
   },
   "actions": {

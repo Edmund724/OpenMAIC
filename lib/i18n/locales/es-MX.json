@@ -170,6 +170,32 @@
       "qa": "Q&A",
       "discussion": "DEB",
       "lecture": "CLASE"
+    },
+    "history": {
+      "open": "Historial de conversaciones",
+      "title": "Conversaciones",
+      "newTalk": "Nuevo chat",
+      "rename": "Renombrar",
+      "renamePlaceholder": "Nombre de la conversación",
+      "today": "Hoy",
+      "yesterday": "Ayer",
+      "earlier": "Anteriores",
+      "empty": "Aún no hay conversaciones"
+    },
+    "status": {
+      "answering": "Respondiendo…",
+      "stop": "Detener",
+      "softClosing": "Esta discusión termina en {{seconds}} s",
+      "otherRunning": "Hay otra discusión en curso",
+      "back": "Volver"
+    },
+    "stream": {
+      "newContent": "Contenido nuevo ↓"
+    },
+    "composer": {
+      "send": "Enviar",
+      "voice": "Voz",
+      "voiceHint": "Entrada de voz (V)"
     }
   },
   "actions": {

@@ -170,6 +170,32 @@
       "qa": "P&R",
       "discussion": "DEB",
       "lecture": "AULA"
+    },
+    "history": {
+      "open": "Histórico de conversas",
+      "title": "Conversas",
+      "newTalk": "Nova conversa",
+      "rename": "Renomear",
+      "renamePlaceholder": "Nome da conversa",
+      "today": "Hoje",
+      "yesterday": "Ontem",
+      "earlier": "Anteriores",
+      "empty": "Ainda não há conversas"
+    },
+    "status": {
+      "answering": "Respondendo…",
+      "stop": "Parar",
+      "softClosing": "Esta discussão termina em {{seconds}} s",
+      "otherRunning": "Há outra discussão em andamento",
+      "back": "Voltar"
+    },
+    "stream": {
+      "newContent": "Conteúdo novo ↓"
+    },
+    "composer": {
+      "send": "Enviar",
+      "voice": "Voz",
+      "voiceHint": "Entrada de voz (V)"
     }
   },
   "actions": {

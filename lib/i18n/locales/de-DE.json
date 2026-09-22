@@ -170,6 +170,32 @@
       "qa": "Q&A",
       "discussion": "Disk.",
       "lecture": "Vortrag"
+    },
+    "history": {
+      "open": "Chatverlauf",
+      "title": "Chats",
+      "newTalk": "Neuer Chat",
+      "rename": "Umbenennen",
+      "renamePlaceholder": "Chatname",
+      "today": "Heute",
+      "yesterday": "Gestern",
+      "earlier": "Älter",
+      "empty": "Noch keine Chats"
+    },
+    "status": {
+      "answering": "Antwortet…",
+      "stop": "Stopp",
+      "softClosing": "Diese Diskussion endet in {{seconds}} s",
+      "otherRunning": "Eine andere Diskussion läuft noch",
+      "back": "Zurück"
+    },
+    "stream": {
+      "newContent": "Neuer Inhalt ↓"
+    },
+    "composer": {
+      "send": "Senden",
+      "voice": "Stimme",
+      "voiceHint": "Spracheingabe (V)"
     }
   },
   "actions": {

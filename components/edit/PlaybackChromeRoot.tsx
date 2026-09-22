@@ -18,7 +18,7 @@ import { useI18n } from '@/lib/hooks/use-i18n';
 import { SceneSidebar } from '@/components/stage/scene-sidebar';
 import { Header } from '@/components/header';
 import { CanvasArea } from '@/components/canvas/canvas-area';
-import { Roundtable } from '@/components/roundtable';
+import { Roundtable, PRESENTATION_COMPOSER_COLUMN_PX } from '@/components/roundtable';
 import { PlaybackEngine, computePlaybackView, shouldAutoResumeLecture } from '@/lib/playback';
 import type { EngineMode, TriggerEvent, Effect } from '@/lib/playback';
 import {
@@ -42,6 +42,7 @@ import type { AudioIndicatorState } from '@/components/roundtable/audio-indicato
 import type { Action, DiscussionAction, SpeechAction } from '@/lib/types/action';
 import { cn } from '@/lib/utils';
 import { ChatArea, type ChatAreaRef } from '@/components/chat/chat-area';
+import { Composer, type ComposerHandle } from '@/components/chat/composer';
 import type { SessionCleanupPayload } from '@/components/chat/use-chat-sessions';
 import { agentsToParticipants, useAgentRegistry } from '@/lib/orchestration/registry/store';
 import type { AgentConfig } from '@/lib/orchestration/registry/types';
@@ -53,7 +54,7 @@ import {
   AlertDialogAction,
   AlertDialogCancel,
 } from '@/components/ui/alert-dialog';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Quote, X } from 'lucide-react';
 import { VisuallyHidden } from 'radix-ui';
 import type { PPTElement } from '@openmaic/dsl';
 import type { ElementReference } from '@/lib/types/chat';
@@ -229,6 +230,15 @@ export const PlaybackChromeRoot = forwardRef<PlaybackChromeRootHandle, PlaybackC
     const [isPresenting, setIsPresenting] = useState(false);
     const [controlsVisible, setControlsVisible] = useState(true);
     const [isPresentationInteractionActive, setIsPresentationInteractionActive] = useState(false);
+    // The presentation composer keeps its own draft: the two renderings of the
+    // input share the component, not the text.
+    const [presentationDraft, setPresentationDraft] = useState('');
+    const presentationComposerRef = useRef<ComposerHandle>(null);
+    // The student's last utterance, echoed on the stage for three seconds.
+    const [studentUtterance, setStudentUtterance] = useState<{ text: string; seq: number } | null>(
+      null,
+    );
+    const studentUtteranceSeqRef = useRef(0);
 
     // Whiteboard state (from canvas store so AI tools can open it)
     const whiteboardOpen = useCanvasStore.use.whiteboardOpen();
@@ -497,6 +507,21 @@ export const PlaybackChromeRoot = forwardRef<PlaybackChromeRootHandle, PlaybackC
         setSoftCloseDeadline(undefined);
       }
     }, []);
+
+    /** Pause the talking buffer and its audio (Space, bubble click, discuss). */
+    const handleDiscussionPause = useCallback(() => {
+      const paused = chatAreaRef.current?.pauseActiveLiveBuffer();
+      if (paused) {
+        discussionTTS.pause();
+        setIsDiscussionPaused(true);
+      }
+    }, [discussionTTS]);
+
+    const handleDiscussionResume = useCallback(() => {
+      chatAreaRef.current?.resumeActiveLiveBuffer();
+      discussionTTS.resume();
+      setIsDiscussionPaused(false);
+    }, [discussionTTS]);
 
     /**
      * Session-stop callback from the chat layer. Runs the normal cleanup, then —
@@ -1255,6 +1280,100 @@ export const PlaybackChromeRoot = forwardRef<PlaybackChromeRootHandle, PlaybackC
     );
     const canPickElement = canPickSlideElement || canPickInteractiveComponent;
 
+    /**
+     * The student speaks. Everything the engine owes that utterance lives here,
+     * in one closure; the composer only hands over the text.
+     */
+    const handleComposerSubmit = useCallback(
+      (msg: string) => {
+        const draft = showElementReference ? draftElementReferenceRef.current : null;
+        const elementReferenceSnapshot: ElementReferenceSendSnapshot | undefined = draft
+          ? {
+              reference: draft.reference,
+              selectionVersion: draft.selectionVersion,
+            }
+          : undefined;
+        // Always clear Level-1 pause state — the closure may hold a stale
+        // isDiscussionPaused value (e.g. voice input's onTranscription callback
+        // captures the send before React re-renders with the updated state).
+        setIsDiscussionPaused(false);
+        // Clear the sticky livePausedRef so the next agent-loop buffer starts
+        // unpaused. (pauseActiveLiveBuffer sets a ref that new buffers inherit —
+        // it must be cleared before sendMessage creates one.)
+        chatAreaRef.current?.resumeActiveLiveBuffer();
+        // Flush any buffered / in-flight TTS audio from the previous agent turn
+        // so it doesn't leak into the next round.
+        discussionTTS.cleanup();
+        // Clear soft-paused state — the student is continuing the topic.
+        if (isTopicPending) {
+          setIsTopicPending(false);
+          setLiveSpeech(null);
+          setSpeakingAgentId(null);
+        }
+        setChatIsSoftClosing(false);
+        // Student interrupts during playback — handleUserInterrupt triggers
+        // onUserInterrupt, which calls sendMessage itself, so skip the direct
+        // send below to avoid sending twice. Include 'paused' because
+        // onInputActivate pauses the engine before the student finishes typing —
+        // without this the interrupt position would never be saved and resuming
+        // after the Q&A would skip to the next sentence.
+        if (
+          engineRef.current &&
+          (engineMode === 'playing' || engineMode === 'live' || engineMode === 'paused')
+        ) {
+          pendingInterruptElementReferenceRef.current = elementReferenceSnapshot;
+          try {
+            engineRef.current.handleUserInterrupt(msg);
+          } finally {
+            pendingInterruptElementReferenceRef.current = undefined;
+          }
+        } else {
+          void sendMessageWithElementReference(msg, elementReferenceSnapshot);
+        }
+        // The stage echoes the utterance for three seconds.
+        studentUtteranceSeqRef.current += 1;
+        setStudentUtterance({ text: msg, seq: studentUtteranceSeqRef.current });
+        // Auto-switch to chat tab when the student sends a message
+        chatAreaRef.current?.switchToTab('chat');
+        setIsCueUser(false);
+        // Immediately mark streaming for the synchronized stop button
+        setChatIsStreaming(true);
+        setChatSessionType(chatSessionType || 'qa');
+        // Optimistic thinking: show the dots immediately so there is no blank gap
+        // between the utterance expiring and the SSE thinking event. The real SSE
+        // event overwrites this with the same or an updated value.
+        setThinkingState({ stage: 'director' });
+      },
+      [
+        chatSessionType,
+        discussionTTS,
+        engineMode,
+        isTopicPending,
+        sendMessageWithElementReference,
+        showElementReference,
+      ],
+    );
+
+    /** Focus / first keystroke → level-1 pause while the answer keeps buffering. */
+    const handleComposerInputActivate = useCallback(() => {
+      if (chatSessionType === 'qa' || chatSessionType === 'discussion') {
+        handleDiscussionPause();
+      }
+      // Also pause the playback engine
+      if (engineRef.current && (engineMode === 'playing' || engineMode === 'live')) {
+        engineRef.current.pause();
+      }
+    }, [chatSessionType, engineMode, handleDiscussionPause]);
+
+    /** Typing or starting a recording keeps a soft-closing conversation alive. */
+    const handleComposerUserInputActivity = useCallback(() => {
+      handleContinueDiscussion();
+    }, [handleContinueDiscussion]);
+
+    const handleComposerActivity = useCallback((active: boolean) => {
+      setIsPresentationInteractionActive(active);
+    }, []);
+
     useEffect(() => {
       if (!elementPickActive || !canPickInteractiveComponent) return;
       const onKeyDown = (event: KeyboardEvent) => {
@@ -1463,10 +1582,37 @@ export const PlaybackChromeRoot = forwardRef<PlaybackChromeRootHandle, PlaybackC
         if (event.defaultPrevented) return;
         // Let modifier-key combos (Ctrl+C, Ctrl+S, etc.) pass through to the browser
         if (event.ctrlKey || event.metaKey || event.altKey) return;
-        if (
+
+        const composerState = isPresenting
+          ? {
+              focused: presentationComposerRef.current?.hasFocus() ?? false,
+              recording: presentationComposerRef.current?.isRecording() ?? false,
+            }
+          : (chatAreaRef.current?.composerState() ?? { focused: false, recording: false });
+
+        if (event.key === 'Escape') {
+          // Escape is the one shortcut that must see the input's own focus: it
+          // stops a recording or drops focus, and only exits the presentation
+          // when the composer has nothing to give up.
+          if (composerState.recording) {
+            event.preventDefault();
+            event.stopPropagation();
+            if (isPresenting) presentationComposerRef.current?.stopVoice();
+            else chatAreaRef.current?.requestComposer('stop-voice');
+            return;
+          }
+          if (composerState.focused) {
+            event.preventDefault();
+            event.stopPropagation();
+            if (isPresenting) presentationComposerRef.current?.blur();
+            else chatAreaRef.current?.requestComposer('blur');
+            return;
+          }
+        } else if (
           isPresentationShortcutTarget(event.target) ||
           isPresentationShortcutTarget(document.activeElement)
         ) {
+          // Every other shortcut waits for the student to leave the text field.
           return;
         }
 
@@ -1485,16 +1631,41 @@ export const PlaybackChromeRoot = forwardRef<PlaybackChromeRootHandle, PlaybackC
             break;
           case ' ':
           case 'Spacebar':
-            // During active QA/discussion, Roundtable owns Space for
-            // buffer-level pause/resume — don't also fire engine play/pause.
-            if (chatSessionType === 'qa' || chatSessionType === 'discussion') break;
+            // During a live QA/discussion, Space pauses and resumes the talking
+            // buffer; the lecture engine's play/pause keeps the key otherwise.
+            if (chatSessionType === 'qa' || chatSessionType === 'discussion') {
+              if (isDiscussionPaused) handleDiscussionResume();
+              else if (!thinkingState && liveSpeech) handleDiscussionPause();
+              event.preventDefault();
+              break;
+            }
             event.preventDefault();
             handlePlayPause();
             break;
+          case 't':
+          case 'T':
+            event.preventDefault();
+            if (isPresenting) {
+              presentationComposerRef.current?.focus();
+              break;
+            }
+            setChatAreaCollapsed(false);
+            chatAreaRef.current?.requestComposer('focus');
+            break;
+          case 'v':
+          case 'V':
+            event.preventDefault();
+            if (isPresenting) {
+              const composer = presentationComposerRef.current;
+              if (composer?.isRecording()) composer.stopVoice();
+              else composer?.startVoice();
+              break;
+            }
+            setChatAreaCollapsed(false);
+            chatAreaRef.current?.requestComposer('toggle-voice');
+            break;
           case 'Escape':
             // With keyboard.lock(), Escape no longer auto-exits fullscreen.
-            // If panels are open, roundtable handles Escape (close panels).
-            // If no panels are open, manually exit fullscreen.
             if (isPresenting && !isPresentationInteractionActive) {
               event.preventDefault();
               togglePresentation();
@@ -1533,18 +1704,23 @@ export const PlaybackChromeRoot = forwardRef<PlaybackChromeRootHandle, PlaybackC
     }, [
       chatSessionType,
       chatAreaCollapsed,
+      handleDiscussionPause,
+      handleDiscussionResume,
       handleNextScene,
       handlePlayPause,
       handlePreviousScene,
+      isDiscussionPaused,
       isPresenting,
       isPresentationInteractionActive,
       isPresentationShortcutTarget,
+      liveSpeech,
       resetPresentationIdleTimer,
       setChatAreaCollapsed,
       setSidebarCollapsed,
       setTTSMuted,
       setTTSVolume,
       sidebarCollapsed,
+      thinkingState,
       togglePresentation,
       ttsMuted,
       ttsVolume,
@@ -1597,6 +1773,39 @@ export const PlaybackChromeRoot = forwardRef<PlaybackChromeRootHandle, PlaybackC
       const roundtableHeight = mode === 'playback' && !isPresenting ? 192 : 0;
       return `calc(100% - ${headerHeight + roundtableHeight}px)`;
     })();
+
+    // The courseware-reference receipt belongs to the input it will be sent
+    // with, so it renders inside whichever composer is on screen.
+    const elementReferencePillNode = draftElementReference ? (
+      <div
+        data-testid="slide-element-reference-pill"
+        className="pointer-events-auto flex w-full min-w-0 items-center gap-2 rounded-full border border-violet-200 bg-white/95 px-3 py-1.5 text-xs shadow-sm backdrop-blur dark:border-violet-700 dark:bg-gray-900/95"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <Quote className="h-3.5 w-3.5 shrink-0 text-violet-600 dark:text-violet-400" />
+        <span className="shrink-0 font-semibold text-violet-700 dark:text-violet-300">
+          {t('chat.lectureNotes.pageLabel', {
+            n: (draftElementReference.sceneOrder ?? 0) + 1,
+          })}{' '}
+          ·{' '}
+          {draftElementReference.elementType === 'interactive'
+            ? t('edit.sceneType.interactive')
+            : getSlideElementTypeLabel(draftElementReference.elementType, t)}{' '}
+          ·
+        </span>
+        <span className="min-w-0 truncate text-gray-600 dark:text-gray-300">
+          {draftElementReference.displaySummary}
+        </span>
+        <button
+          type="button"
+          onClick={() => setDraftElementReference(null)}
+          className="-mr-1 shrink-0 rounded-full p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-800 dark:hover:text-gray-200"
+          aria-label={t('chat.elementReference.clear')}
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    ) : undefined;
 
     return (
       <div
@@ -1734,65 +1943,10 @@ export const PlaybackChromeRoot = forwardRef<PlaybackChromeRootHandle, PlaybackC
                 endFlashSessionType={endFlashSessionType}
                 thinkingState={thinkingState}
                 isCueUser={isCueUser}
+                studentUtterance={studentUtterance}
                 isSoftClosing={chatIsSoftClosing}
                 softCloseDeadline={softCloseDeadline}
                 isTopicPending={isTopicPending}
-                onMessageSend={async (msg) => {
-                  const draft = showElementReference ? draftElementReferenceRef.current : null;
-                  const elementReferenceSnapshot: ElementReferenceSendSnapshot | undefined = draft
-                    ? {
-                        reference: draft.reference,
-                        selectionVersion: draft.selectionVersion,
-                      }
-                    : undefined;
-                  // Always clear Level-1 pause state — the closure may hold a stale
-                  // isDiscussionPaused value (e.g. voice input's onTranscription callback
-                  // captures onMessageSend before React re-renders with the updated state).
-                  setIsDiscussionPaused(false);
-                  // Clear the sticky livePausedRef so the next agent-loop buffer
-                  // starts unpaused. (pauseActiveLiveBuffer sets a ref that new
-                  // buffers inherit — must be cleared before sendMessage creates one.)
-                  chatAreaRef.current?.resumeActiveLiveBuffer();
-                  // Flush any buffered / in-flight TTS audio from the previous
-                  // agent turn so it doesn't leak into the next round.
-                  discussionTTS.cleanup();
-                  // Clear soft-paused state — user is continuing the topic
-                  if (isTopicPending) {
-                    setIsTopicPending(false);
-                    setLiveSpeech(null);
-                    setSpeakingAgentId(null);
-                  }
-                  setChatIsSoftClosing(false);
-                  // User interrupts during playback — handleUserInterrupt triggers
-                  // onUserInterrupt callback which already calls sendMessage, so skip
-                  // the direct sendMessage below to avoid sending twice.
-                  // Include 'paused' because onInputActivate pauses the engine before
-                  // the user finishes typing — without this the interrupt position
-                  // would never be saved and resuming after QA skips to the next sentence.
-                  if (
-                    engineRef.current &&
-                    (engineMode === 'playing' || engineMode === 'live' || engineMode === 'paused')
-                  ) {
-                    pendingInterruptElementReferenceRef.current = elementReferenceSnapshot;
-                    try {
-                      engineRef.current.handleUserInterrupt(msg);
-                    } finally {
-                      pendingInterruptElementReferenceRef.current = undefined;
-                    }
-                  } else {
-                    void sendMessageWithElementReference(msg, elementReferenceSnapshot);
-                  }
-                  // Auto-switch to chat tab when user sends a message
-                  chatAreaRef.current?.switchToTab('chat');
-                  setIsCueUser(false);
-                  // Immediately mark streaming for synchronized stop button
-                  setChatIsStreaming(true);
-                  setChatSessionType(chatSessionType || 'qa');
-                  // Optimistic thinking: show thinking dots immediately so there's
-                  // no blank gap between userMessage expiry and the SSE thinking event.
-                  // The real SSE event will overwrite this with the same or updated value.
-                  setThinkingState({ stage: 'director' });
-                }}
                 onDiscussionStart={() => {
                   // User clicks "Join" on ProactiveCard
                   engineRef.current?.confirmDiscussion();
@@ -1803,41 +1957,11 @@ export const PlaybackChromeRoot = forwardRef<PlaybackChromeRootHandle, PlaybackC
                 }}
                 onStopDiscussion={handleStopDiscussion}
                 onContinueDiscussion={handleContinueDiscussion}
-                onUserInputActivity={() => {
-                  handleContinueDiscussion();
-                }}
-                onInputActivate={() => {
-                  // Level-1 pause: freeze buffer tick + TTS audio while SSE keeps buffering.
-                  // User resumes manually via Space / pause button after closing the input.
-                  // No isDiscussionPaused guard — always attempt to pause the buffer.
-                  // The return value ensures UI state stays in sync with buffer state.
-                  if (chatSessionType === 'qa' || chatSessionType === 'discussion') {
-                    const paused = chatAreaRef.current?.pauseActiveLiveBuffer();
-                    if (paused) {
-                      discussionTTS.pause();
-                      setIsDiscussionPaused(true);
-                    }
-                  }
-                  // Also pause playback engine
-                  if (engineRef.current && (engineMode === 'playing' || engineMode === 'live')) {
-                    engineRef.current.pause();
-                  }
-                }}
                 onResumeTopic={doResumeTopic}
                 onPlayPause={handlePlayPause}
                 isDiscussionPaused={isDiscussionPaused}
-                onDiscussionPause={() => {
-                  const paused = chatAreaRef.current?.pauseActiveLiveBuffer();
-                  if (paused) {
-                    discussionTTS.pause();
-                    setIsDiscussionPaused(true);
-                  }
-                }}
-                onDiscussionResume={() => {
-                  chatAreaRef.current?.resumeActiveLiveBuffer();
-                  discussionTTS.resume();
-                  setIsDiscussionPaused(false);
-                }}
+                onDiscussionPause={handleDiscussionPause}
+                onDiscussionResume={handleDiscussionResume}
                 totalActions={totalActions}
                 currentActionIndex={currentPlaybackActionIndex ?? 0}
                 currentSceneIndex={currentSceneIndex}
@@ -1853,31 +1977,42 @@ export const PlaybackChromeRoot = forwardRef<PlaybackChromeRootHandle, PlaybackC
                 isPresenting={isPresenting}
                 controlsVisible={controlsVisible}
                 onTogglePresentation={togglePresentation}
-                onPresentationInteractionChange={setIsPresentationInteractionActive}
                 fullscreenContainerRef={stageRef}
                 showElementReference={showElementReference}
                 canPickSlideElement={canPickElement}
                 elementPickActive={elementPickActive}
                 onToggleElementPick={handleToggleElementPick}
-                elementReferencePill={
-                  draftElementReference
-                    ? {
-                        sceneLabel: t('chat.lectureNotes.pageLabel', {
-                          n: (draftElementReference.sceneOrder ?? 0) + 1,
-                        }),
-                        elementType:
-                          draftElementReference.elementType === 'interactive'
-                            ? t('edit.sceneType.interactive')
-                            : getSlideElementTypeLabel(draftElementReference.elementType, t),
-                        displaySummary: draftElementReference.displaySummary,
-                      }
-                    : undefined
-                }
-                onClearElementReference={() => setDraftElementReference(null)}
               />
             </div>
           )}
         </div>
+
+        {/* Presentation composer — a column reserved beside the slide, never over
+            it: the "black frame" is viewport margin, and at 16:9 there is none. */}
+        {isPresenting && (
+          <div
+            data-testid="presentation-composer-column"
+            style={{ width: PRESENTATION_COMPOSER_COLUMN_PX }}
+            className="shrink-0 h-full flex flex-col justify-end p-2"
+          >
+            <Composer
+              ref={presentationComposerRef}
+              variant="fullscreen"
+              value={presentationDraft}
+              onValueChange={setPresentationDraft}
+              onSubmit={(text) => {
+                setPresentationDraft('');
+                handleComposerSubmit(text);
+              }}
+              onInputActivate={handleComposerInputActivate}
+              onUserInputActivity={handleComposerUserInputActivity}
+              onActivityChange={handleComposerActivity}
+              isCueUser={isCueUser}
+              disabled={chatIsStreaming}
+              elementReferencePill={elementReferencePillNode}
+            />
+          </div>
+        )}
 
         {/* Chat Area — playback / autonomous always renders it here; Pro
           (edit) mode unmounts this whole PlaybackChromeRoot, so the
@@ -1950,6 +2085,12 @@ export const PlaybackChromeRoot = forwardRef<PlaybackChromeRootHandle, PlaybackC
             onStopSession={handleSessionStop}
             onSegmentSealed={discussionTTS.handleSegmentSealed}
             shouldHoldAfterReveal={discussionTTS.shouldHold}
+            onComposerSubmit={handleComposerSubmit}
+            onComposerInputActivate={handleComposerInputActivate}
+            onComposerUserInputActivity={handleComposerUserInputActivity}
+            onComposerActivity={handleComposerActivity}
+            isCueUser={isCueUser}
+            elementReferencePill={isPresenting ? undefined : elementReferencePillNode}
           />
         </div>
 

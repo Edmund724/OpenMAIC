@@ -32,6 +32,7 @@ import {
   type AppDocumentOutline,
 } from '@/lib/document-store';
 import { clearAllForScene } from '@/lib/quiz/persistence';
+import { clearDisplaySession } from '@/lib/chat/display-session';
 import { beginStageRuntimeDeletionSafely } from '@/lib/runtime/store';
 import { clearStageDrainWatermarks } from '@/lib/pbl/v2/runtime/drain';
 import { createLogger } from '@/lib/logger';
@@ -642,6 +643,11 @@ async function performStageDeletion(stageId: string): Promise<void> {
               await clearCurrentScene(stageId);
             } catch (error) {
               log.warn(`Failed to clear editor current scene for stage ${stageId}:`, error);
+            }
+            try {
+              await clearDisplaySession(stageId);
+            } catch (error) {
+              log.warn(`Failed to clear displayed chat session for stage ${stageId}:`, error);
             }
 
             // Sweep quiz persistence keys for each deleted scene.

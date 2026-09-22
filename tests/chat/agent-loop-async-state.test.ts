@@ -72,3 +72,29 @@ describe('agent loop async store state', () => {
     expect(fetchChat).not.toHaveBeenCalled();
   });
 });
+
+describe('agent loop resume state', () => {
+  it('starts from the director state the request carries', async () => {
+    const fetchChat = vi.fn(async () => new Response(''));
+    const directorState = { turnCount: 2, agentResponses: [], whiteboardLedger: [] };
+
+    await expect(
+      runAgentLoop(
+        { config: { agentIds: [] }, apiKey: '', directorState },
+        {
+          getStoreState: () => state,
+          getMessages: () => [],
+          fetchChat,
+          onEvent: vi.fn(),
+          onIterationEnd: async () => null,
+        },
+        new AbortController().signal,
+      ),
+    ).resolves.toMatchObject({ reason: 'no_done' });
+
+    expect(fetchChat).toHaveBeenCalledWith(
+      expect.objectContaining({ directorState }),
+      expect.any(AbortSignal),
+    );
+  });
+});
