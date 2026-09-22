@@ -98,9 +98,11 @@
 
 ## D. 状态与可靠性
 
-### D1. 双实例竞争隐患 ⭐建议先验证是否真实触发
-- 现状：`components/scene-renderers/InteractiveIframeHost.tsx` 也会渲染 `PlaybackChromeRoot` → 同一 stage 可能出现两个 `useChatSessions` 实例；两者共享 `useStageStore.chats`（`lib/store/stage.ts:290`）但 React state 各自独立，存在互相覆盖（后写覆盖先写）风险。
-- 改进：先写复现测试确认；若属实，把会话 state 完全下沉到 zustand（单一事实源），hook 只做派发。
+### D1. 双实例竞争隐患 —— 已验证：不触发，已加守卫（2026-09-22）
+- 现状（已核实）：`components/scene-renderers/InteractiveIframeHost.tsx` **不**渲染 `PlaybackChromeRoot`——原文把这个文件里的一句 doc 注释（`:124`）读成了渲染。每个 stage 只有一条挂载链、一个 `useChatSessions` 实例：`classroom/ClassroomSurface.tsx:571` → `stage.tsx:355`（只有 playback 分支挂）→ `PlaybackChromeRoot.tsx:1886` → `chat-area.tsx:138`。
+- 机制（探针复现）：一旦真出现第二个实例，两者共享 `useStageStore.chats`（`lib/store/stage.ts:290`）却各自持 React state（`use-chat-sessions.ts:559-566`，只在挂载时从 store 播种一次），每次变化整体写回（`:626-630`，无合并）→ 后写者把先写者的会话从持久化列表里抹掉。
+- 改进（已定）：**不必**把会话 state 下沉到 zustand。真需要时的便宜后路：写回效果只允许 owner 执行，secondary 实例改为订阅 `useStageStore.chats` 只读镜像。
+- 守卫：`tests/chat/chat-session-mount-graph.test.ts`（出现第二个挂载点即变红）与 `tests/chat/chat-session-double-instance-hazard.test.ts`（双实例复现；注意断言极性是"绿＝机制成立"）。结论与边界见 `.scratch/classroom-chat-panel/issues/04-verify-double-instance.md`。
 
 ### D2. 元素引用草稿不挂会话
 - 现状：草稿是 `PlaybackChromeRoot` 组件级 state（`:159-173`），切场景/换会话后仍在，可能把 A 场景的引用带进 B 会话的提问（有 selectionVersion + accepted header 兜底，但语义脆）。
@@ -140,8 +142,10 @@
 | 优先级 | 项 | 理由 |
 |---|---|---|
 | 高（用户感知） | A1 Markdown、A3 打字机跳过、B1 会话管理、B2 旧会话可续 | 纯前端，风险低收益明显 |
-| 高（正确性） | D1 双实例（先验证）、C5 legacy bug（若还在用） | 隐患/已知错误 |
+| 高（正确性） | C5 legacy bug（若还在用） | 已知错误 |
 | 中（回答质量） | C1 compaction 持久化、C2 child 记忆、C3 措辞 | 后端改动，需评估 token 成本 |
 | 中 | A2 消息操作、A4 thinking 展示、B4 tab 内输入框、D3 SSE 统一 | 体验完善 |
 | 低/需产品决策 | B3 多会话并行、C7 证据降级、E1 legacy 退役、E3 跨会话记忆 | 涉及语义/架构决策 |
-| 先验证再立项 | D1、D5 | 需要复现/性能数据支撑 |
+| 先验证再立项 | D5 | 需要性能数据支撑 |
+
+D1 已于 2026-09-22 验证：不触发（原文把一句 doc 注释读成了渲染），已加守卫测试——见 D1 条。

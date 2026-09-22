@@ -48,6 +48,9 @@ Status: open
   - 单活会话的判据是 `isOpenLiveSession`（`use-chat-sessions.ts:311-315`：type 为 qa/discussion 且 status 为 active/soft-closing）；`createSession` 建出来的就是 `status: 'active'` 的空会话（`:1400`），所以它不能直接当"新对话"用。
   - 讨论邀请卡在 `components/chat/proactive-card.tsx`，经 portal 渲染、锚在老师 / 学生 agent 头像上（`roundtable/index.tsx:267-270`、`:988`、`:1113`、`:2046`），不在横条右栏被撤走的控件之列；引擎会停在 `currentTrigger` 上等学生点（`lib/playback/engine.ts:264-270`、`:347-349`）。
   - 停止 / 继续按钮今天在展开的会话卡片末尾（`chat-session.tsx:353-384`；`canEnd` = qa/discussion 且 active/soft-closing，`:174-175`），"已结束"分隔条在 `:330-347`。
+  - **D1 的前提是错的**：`components/scene-renderers/InteractiveIframeHost.tsx` 不渲染 `PlaybackChromeRoot`（那句是把 `:124` 的 doc 注释读成了渲染）。每个 stage 只有一条挂载链、一个 `useChatSessions` 实例：`classroom/ClassroomSurface.tsx:571` → `stage.tsx:355`（只有 playback 分支挂）→ `PlaybackChromeRoot.tsx:1886` → `chat-area.tsx:138`。守卫测试：`tests/chat/chat-session-mount-graph.test.ts`。
+  - 但双实例的**机制**是真的（jsdom 探针复现）：`use-chat-sessions.ts:559-566` 的 `sessions`／`activeSessionId` 是各自独立的 React state（只在挂载时从 `useStageStore.getState().chats` 播种一次），`:626-630` 每次变化整体写回 `setChats`（无合并）→ 第二个实例会把第一个的会话从持久化列表里抹掉（`chats` 只在 `getState()` 里读，不是订阅）。**结论：不必把会话状态下沉到 zustand**；真需要时的便宜后路是"写回只允许 owner、secondary 只读订阅"。
+  - `pnpm test` 现状有 3–4 个**既有失败套件**（`tests/runtime/chat-storage.test.ts`、`tests/quiz/runtime.test.ts`、`tests/media/server-backed-media-orchestrator.test.ts`、`tests/workbench/workspace-rail-session-rename.test.ts`，5s 超时类，单独跑也失败）——规格的"验证方式"要按"没有新增失败"写，不是"全绿"。
 - **参照**：`reports/chat-tab-optimization.md`（本 effort 开工前刚产出的改进点清单；其中 B1/B2/B4/D1/E2 与本 effort 直接重叠，A/C/D3 组不在范围内）。
 
 ## Decisions so far
@@ -57,6 +60,7 @@ Status: open
 - [R1：主流 AI 对话产品的会话管理惯例调研](issues/01-ai-chat-conventions-research.md): 六家一致（列表在侧边栏、条目只显示标题、标题自动生成可重命名）；时间表达三种做法并存且**六个产品都不给逐条时间戳**，靠分组表达（Copilot 官方明确移除）；重命名/删除有"条目菜单"与"对话页顶部"两种范式；窄容器两屏是平台级规范（Material list-detail 点名消息类应用：compact 下就地替换、返回键回列表、尺寸变化保留状态）；后台推进的会话**自动切前台在六个产品里无先例**（相邻先例只有站内客服组件）。细节与逐条出处见 research/01-ai-chat-conventions.md
 - [P1：课堂对话面板原型](issues/02-panel-prototype.md): 四个变体（改造前 / A 两屏切换 / B 历史浮层 / C 上下分栏）做出后用户选定 **B**——对话常驻、历史从面板顶部盖一层浮层，学生永远不离开对话屏。附带定下：全屏讲课的输入条移进**右侧黑框**（幻灯片区之外、收成窄栏形态），课件区不留任何悬浮件。原型在 `app/prototype/classroom-chat`，可点、带状态开关
 - [G1：面板与课堂引擎的边界行为](issues/03-panel-engine-boundary.md): "显示中的对话"（新词 `displaySessionId`）与"活跃会话"分开，抢前台的判据是**"谁的动作"**——学生发起的（点加入讨论、发消息）才切前台并关浮层，引擎自己发起的（soft-close 复活、切场景结束、lecture 进场）只出未读提示。"新对话"= 纯草稿位（不落会话、不动活跃会话）；点开旧对话只换显示、真发消息时才结束旧的活跃会话并接管；续写旧对话 = **复活那一段会话本身**并带上它的 `directorState`；停止 / 继续搬进输入框上方的状态条；未读只用一个琥珀点、切到前台即清零；被引擎就地结束就安静收场；草稿按会话各留一份；lecture 不再抢显示指针；列表去掉逐条时间戳；讨论邀请卡留在舞台侧；消息流贴底才跟随。理由与 file:line 见票
+- [T1：验证双实例会话状态竞争](issues/04-verify-double-instance.md): **D1 的前提不成立**——`InteractiveIframeHost` 不渲染 `PlaybackChromeRoot`（原文把一句 doc 注释读成了渲染），每个 stage 只有一条挂载链、一个 `useChatSessions` 实例，**不必把会话状态下沉到 zustand**。但机制是真的：真有第二个实例时，`:626-630` 的整体写回会把对方的会话从 `useStageStore.chats` 里抹掉（jsdom 探针复现）。产出两个测试——`tests/chat/chat-session-mount-graph.test.ts`（守卫：第二个挂载点出现即红）、`tests/chat/chat-session-double-instance-hazard.test.ts`（复现，绿＝机制成立）。重开条件：新增第二个挂载点，或把课堂挂进第二个 React root
 
 ## Not yet specified
 
@@ -86,3 +90,4 @@ Status: open
 - 讲课记录（lecture 会话）暴露进列表——已决定不进
 - 多会话并行（同时存在多个活动会话）——会破坏课堂单活语义与白板 ledger 归属
 - legacy / Pi 双后端与 SSE 传输层——见报告 C、D3 组
+- 跨标签页的会话写覆盖：同一课堂开两个标签，两个 JS 上下文各持一份 `chats`，写回 IndexedDB 就是后写覆盖先写（T1 发现；不是 D1 那条，"下沉 zustand"也修不了）
