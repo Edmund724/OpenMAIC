@@ -9,6 +9,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import type { StatusBarState } from './status-bar';
 
 export const VARIANT_ORDER = ['current', 'A', 'B', 'C'] as const;
 export type VariantKey = (typeof VARIANT_ORDER)[number];
@@ -110,16 +111,20 @@ export function StateControls({
 }) {
   const router = useRouter();
 
-  const toggle = (key: string, on: boolean) => {
-    router.replace(buildUrl(params, { [key]: on ? '' : '1' }), { scroll: false });
+  const setParam = (key: string, value: string) => {
+    router.replace(buildUrl(params, { [key]: value }), { scroll: false });
   };
 
-  const items: Array<{ key: string; label: string; on: boolean }> = [
+  const items: Array<{ key: string; label: string; on: boolean; value?: string }> = [
     { key: 'rec', label: '录音态', on: flags.recording },
     { key: 'cue', label: '轮到你了', on: flags.cueUser },
     { key: 'empty', label: '空对话', on: flags.emptyConversation },
     { key: 'fs', label: '全屏讲课', on: flags.fullscreen },
     { key: 'narrow', label: '窄面板 240px', on: flags.narrowPanel },
+    { key: 'new', label: '有新内容 ↓', on: flags.newContent },
+    { key: 'bar', value: 'stop', label: '状态条·活跃', on: flags.statusBar === 'stop' },
+    { key: 'bar', value: 'continue', label: '状态条·续接', on: flags.statusBar === 'continue' },
+    { key: 'bar', value: 'other', label: '状态条·另一端', on: flags.statusBar === 'other' },
   ];
 
   if (process.env.NODE_ENV === 'production') return null;
@@ -130,8 +135,8 @@ export function StateControls({
         <span className="px-1 text-[10px] font-semibold text-gray-400">状态</span>
         {items.map((item) => (
           <button
-            key={item.key}
-            onClick={() => toggle(item.key, item.on)}
+            key={item.label}
+            onClick={() => setParam(item.key, item.on ? '' : (item.value ?? '1'))}
             className={cn(
               'rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors',
               item.on
@@ -153,14 +158,19 @@ export interface PrototypeFlags {
   readonly emptyConversation: boolean;
   readonly fullscreen: boolean;
   readonly narrowPanel: boolean;
+  readonly newContent: boolean;
+  readonly statusBar: StatusBarState;
 }
 
 export function readFlags(params: Record<string, string>): PrototypeFlags {
+  const bar = params.bar;
   return {
     recording: params.rec === '1',
     cueUser: params.cue === '1',
     emptyConversation: params.empty === '1',
     fullscreen: params.fs === '1',
     narrowPanel: params.narrow === '1',
+    newContent: params.new === '1',
+    statusBar: bar === 'stop' || bar === 'continue' || bar === 'other' ? bar : 'none',
   };
 }

@@ -27,8 +27,10 @@ import {
 import { cn } from '@/lib/utils';
 import { Composer, type ComposerProps } from './composer';
 import { EmptyHistory, HistoryList, MessageFlow } from './message-flow';
-import type { MockSession } from './mock-data';
+import { MessageScroll } from './message-scroll';
+import { CURRENT_SESSION, type MockSession } from './mock-data';
 import type { PrototypeFlags } from './prototype-switcher';
+import { StatusBar } from './status-bar';
 
 export interface PanelShared {
   readonly flags: PrototypeFlags;
@@ -39,6 +41,32 @@ export interface PanelShared {
   readonly onPickSession: (id: string) => void;
   readonly onNewChat: () => void;
   readonly composer: ComposerProps;
+}
+
+/**
+ * A/B/C 共用下半截：消息流（贴底才跟随，上翻过出「有新内容 ↓」）+ 细状态条 + 输入区。
+ * 三个变体的差别只在上半截——历史列表和对话怎么分空间。
+ */
+function ConversationPane({ shared }: { readonly shared: PanelShared }) {
+  return (
+    <>
+      <MessageScroll
+        session={shared.currentSession}
+        empty={shared.empty}
+        newContent={shared.flags.newContent}
+      />
+      <div className="shrink-0 border-t border-gray-100 p-2">
+        <StatusBar
+          key={shared.flags.statusBar}
+          state={shared.flags.statusBar}
+          onStop={() => undefined}
+          onContinue={() => undefined}
+          onBack={() => shared.onPickSession(CURRENT_SESSION.id)}
+        />
+        <Composer {...shared.composer} />
+      </div>
+    </>
+  );
 }
 
 function TabButton({
@@ -222,14 +250,7 @@ export function VariantA({ shared }: { readonly shared: PanelShared }) {
           )}
         </div>
       ) : (
-        <>
-          <div className="flex-1 overflow-y-auto">
-            <MessageFlow session={shared.currentSession} empty={shared.empty} />
-          </div>
-          <div className="shrink-0 border-t border-gray-100 p-2">
-            <Composer {...shared.composer} />
-          </div>
-        </>
+        <ConversationPane shared={shared} />
       )}
     </div>
   );
@@ -261,12 +282,7 @@ export function VariantB({ shared }: { readonly shared: PanelShared }) {
         />
       </div>
 
-      <div className="flex-1 overflow-y-auto">
-        <MessageFlow session={shared.currentSession} empty={shared.empty} />
-      </div>
-      <div className="shrink-0 border-t border-gray-100 p-2">
-        <Composer {...shared.composer} />
-      </div>
+      <ConversationPane shared={shared} />
 
       {historyOpen && (
         <>
@@ -345,12 +361,7 @@ export function VariantC({ shared }: { readonly shared: PanelShared }) {
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto">
-        <MessageFlow session={shared.currentSession} empty={shared.empty} />
-      </div>
-      <div className="shrink-0 border-t border-gray-100 p-2">
-        <Composer {...shared.composer} />
-      </div>
+      <ConversationPane shared={shared} />
     </div>
   );
 }

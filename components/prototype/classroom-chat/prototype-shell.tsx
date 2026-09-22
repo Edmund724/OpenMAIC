@@ -9,7 +9,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ClassroomFrame, FullscreenStage } from './classroom-frame';
 import { Composer } from './composer';
-import { CURRENT_SESSION, MOCK_SESSIONS } from './mock-data';
+import { CURRENT_SESSION, ENDED_DISCUSSION_SESSION, MOCK_SESSIONS } from './mock-data';
 import {
   PrototypeSwitcher,
   StateControls,
@@ -31,7 +31,7 @@ export function PrototypeShell({ params }: { readonly params: Record<string, str
     : 'current';
 
   const [draft, setDraft] = useState('');
-  const [currentId, setCurrentId] = useState(CURRENT_SESSION.id);
+  const [pickedId, setPickedId] = useState<string | null>(null);
   const [newChat, setNewChat] = useState(false);
 
   const toggleParam = (key: string, on: boolean) => {
@@ -39,6 +39,9 @@ export function PrototypeShell({ params }: { readonly params: Record<string, str
   };
 
   const sessions = MOCK_SESSIONS;
+  // 「另一端还有讨论在进行」演示态：没点过任何条目时，显示那段已结束的讨论
+  const currentId =
+    pickedId ?? (flags.statusBar === 'other' ? ENDED_DISCUSSION_SESSION.id : CURRENT_SESSION.id);
   const currentSession = sessions.find((session) => session.id === currentId) ?? CURRENT_SESSION;
   const empty = flags.emptyConversation || newChat;
 
@@ -63,7 +66,7 @@ export function PrototypeShell({ params }: { readonly params: Record<string, str
     currentSession,
     empty,
     onPickSession: (id) => {
-      setCurrentId(id);
+      setPickedId(id);
       setNewChat(false);
     },
     onNewChat: () => {

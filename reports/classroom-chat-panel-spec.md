@@ -108,8 +108,12 @@ composerDrafts: { get(id: string): string; set(id: string, text: string): void }
 ## 5. 改造 `components/chat/chat-area.tsx`
 
 - 对话 tab 从"卡片列表"改成三段：**常驻消息流 + 状态条 + composer**。
-  - 消息流：把 `ChatSessionComponent` 从卡片里提出来，渲染 `displaySession`；无 display → 空对话屏（图标 + "开始一段新对话"，用现键 `chat.startConversation`）。贴底跟随沿用 `chat-session.tsx:182-218` 的 `isAtBottomRef` 判定，补"有新内容 ↓"按钮与恢复跟随。
-  - 状态条：有活跃 / soft-closing 会话时出现——"停止"（`endSession` + `onStopSession`，现 `:181-200`）、soft-closing 的"继续" + 倒计时（`continueSoftClosingSession`，现 `:202-205`）、当活跃会话 ≠ display 时的"另一端还有讨论在进行 · 回去"。
+  - 消息流：把 `ChatSessionComponent` 从卡片里提出来，渲染 `displaySession`；无 display → 空对话屏（图标 + "开始一段新对话"，用现键 `chat.startConversation`）。贴底跟随沿用 `chat-session.tsx:182-218` 的 `isAtBottomRef` 判定（距底 < 24px 算贴底）；不贴底时在消息流底部悬浮一枚深色胶囊 **"有新内容 ↓"**（水平居中、离底 12px），点它落到底并恢复跟随，落到底即自行消失（观感以原型 `?new=1` 为准）。
+  - 状态条：坐在 **composer 正上方、同一片 footer 内** 的一条细带（浅灰底 + 1px 描边、圆角、高约 24px；左起一枚图标 + 一行小字，右端一枚描边胶囊按钮），有活跃 / soft-closing 会话时出现，三种形态：
+    - 活跃：紫点 + "张老师正在回答…" + **停止**（`endSession` + `onStopSession`，现 `:181-200`）
+    - soft-closing：对话图标 + "这段讨论还有 12s 结束" + **继续**（`continueSoftClosingSession`，现 `:202-205`）
+    - 活跃会话 ≠ display："另一端还有讨论在进行" + **回去**（只换 display，不结束任何会话）
+    观感以原型 `?bar=stop|continue|other` 为准（`components/prototype/classroom-chat/status-bar.tsx`）。
   - 旧的会话卡片末尾那对按钮（`chat-session.tsx:353-384`）随之删掉，"已结束"分隔条（`:330-347`）保留为状态展示。
 - 顶部行加历史入口按钮，浮层从这里盖下来。
 - 未读点：`hasActiveChatSession`（`:163-166`）换成 `unreadSessionIds.size > 0 || isCueUser`；显示条件（今天只在笔记 tab 时显示，`:305`）不变。
@@ -121,7 +125,10 @@ composerDrafts: { get(id: string): string; set(id: string, text: string): void }
 - `onMessageSend`（`:1740-1795`）原样保留，改由 ChatArea 的 `onComposerSubmit` 引用；内部 11 个副作用与 `sendMessageWithElementReference`（`:302-327`）不动。
 - 元素引用：`elementReferencePill` / `onClearElementReference`（今天喂 Roundtable `:1862-1876`）转喂 ChatArea；`showElementReference` / `canPickSlideElement` / `elementPickActive` / `onToggleElementPick` 仍只给画布工具栏；`draftElementReference` 与那几个 ref 全部不动。
 - `onPresentationInteractionChange`（今天由 Roundtable 上报，`index.tsx:519-529`）：来源改为 composer 的 `onActivityChange`，经 ChatArea 转发。
-- **全屏黑框**：在 `stageRef` 内、`ChatArea` 之前新建一列容器（宽 268px，原型值），只在 `isPresenting` 时渲染 composer 的 `fullscreen` 形态；`:613-614` 的"强制收起"策略改为**仍收起右侧面板、但黑框照常渲染输入条**。`roundtable/index.tsx:770` / `:794` / `:808` / `:951` 那几处按 `chatCollapsed / chatAreaWidth` 算的 fixed 偏移跟着改（输入条搬走后它们只剩工具栏与气泡）。
+- **全屏黑框（2026-09-22 定案：恒预留一列，不做"贴余白"）**：在 `stageRef` 内、`ChatArea` 之前新建一列容器（宽 **268px** + `shrink-0`），只在 `isPresenting` 时渲染 composer 的 `fullscreen` 形态；`:613-614` 的"强制收起"策略改为**仍收起右侧面板、但这一列照常渲染输入条**。
+  - 为什么必须预留：幻灯片区是 `aspect-[16/9] h-full`（`canvas-area.tsx:328-331`），全屏时 header 与横条高度都归零（`:1596-1598`），所谓"右侧黑框"就是视口余白——宽高比不到约 2.03:1 时它连 268px 都没有，**16:9 屏上正好为 0**。预留一列后 `CanvasArea` 在剩下的宽度里 contain，任何比例下都不遮挡课件；代价是 16:9 屏上课件缩小约 14%、上下留黑边。
+  - 讨论邀请卡（全屏）**不搬动**：它锚在 `fixed bottom-5` 的 dock 头像上（`roundtable/index.tsx:950` / `:988`），按视口坐标落在锚点上方 12px（`proactive-card.tsx:63-80`），因此会盖住幻灯片下缘那条带子——与今天一致，且它是会自动跳过的短暂件；P1 的"课件区不留悬浮件"只针对常驻的输入条。
+  - `roundtable/index.tsx:770` / `:794` / `:808` / `:951` 那几处按 `chatCollapsed / chatAreaWidth` 算的 fixed 偏移跟着改（输入条搬走后它们只剩工具栏与气泡）。
 - 横条常量：`roundtableHeight = 192`（`:1597`）与 `roundtable/index.tsx:1141` 的 `h-[192px]` **不变**（Q18 只撤控件，不改高度）；`sceneViewerHeight`（`:1595-1599`）不动。`lib/edit/contain-box.ts:55` 的 `PLAYBACK_CHROME_PX = 80 + 168` 是影子常量（只喂工作台面板宽度），本次不动。
 
 ## 7. 改造 `components/roundtable/index.tsx`
@@ -160,6 +167,7 @@ composerDrafts: { get(id: string): string; set(id: string, text: string): void }
 - `tests/lib/chat/display-session.test.ts`：注入 KV 的读写 / 坏数据 / 清理；stage 删除级联扩到 `tests/runtime/stage-delete-wiring.test.ts`。
 - `tests/chat/composer.test.tsx`：Enter / Shift+Enter / IME、录音结果落草稿不自动发送、cue 态、disabled。
 - `tests/chat/use-chat-sessions-display.test.ts`：兜底链（指针失效 → 最新 → null）、续写复活（completed → active、复用 sessionId、带上 `directorState`）、未读（引擎写入非显示会话 → 未读；`setDisplaySessionId` 清零）。
+- `tests/chat/chat-area-transcript.test.tsx`：贴底跟随（距底 < 24px 出/不出"有新内容 ↓"、点它落底并消失）、状态条三态（活跃 / soft-closing 倒计时 / 另一端 · 回去）。
 - **守卫（今天没有守门）**：断言横条不再渲染麦克风 / 气泡按钮 / 用户头像，且右栏头像条与 `ProactiveCard` 锚点仍在。
 
 ## 11. 不做的事
@@ -176,8 +184,8 @@ composerDrafts: { get(id: string): string; set(id: string, text: string): void }
 1. composer 组件 + 面板常驻（输入区先在面板里活起来，横条照旧）。
 2. `display-session.ts` + `displaySessionId` + 兜底链。
 3. 续写复活（判据点）+ 标题派生。
-4. 未读 + 状态条。
+4. 未读 + 状态条 + 消息流"有新内容 ↓"。
 5. 历史浮层 + 改名。
 6. 撤右栏下半截 + 删旧输入面板 / 旧输入态 / 旧快捷键。
-7. 全屏黑框容器 + fixed 偏移收尾。
+7. 全屏预留一列（268px 黑框）+ fixed 偏移收尾。
 8. i18n 12 文件 + 测试修补与新增。

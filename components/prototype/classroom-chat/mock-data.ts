@@ -188,6 +188,10 @@ export const GROUP_LABELS: Record<MockSession['group'], string> = {
 
 export const CURRENT_SESSION = MOCK_SESSIONS[0];
 
+/** 「另一端还有讨论在进行」演示态里学生正看着的那段——一段已经结束的小组讨论。 */
+export const ENDED_DISCUSSION_SESSION =
+  MOCK_SESSIONS.find((session) => session.kind === 'discussion') ?? CURRENT_SESSION;
+
 export const COURSE = {
   name: '数据结构与算法 · 第 7 讲',
   slide: '平衡二叉树',

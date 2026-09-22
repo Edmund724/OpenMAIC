@@ -10,7 +10,9 @@
  *   /prototype/classroom-chat?variant=B          → 历史浮层
  *   /prototype/classroom-chat?variant=C          → 上下分栏
  * 状态开关（可叠加）：&rec=1 录音态 / &cue=1 轮到你了 / &empty=1 空对话 /
- *   &fs=1 全屏讲课 / &narrow=1 窄面板 240px
+ *   &fs=1 全屏讲课 / &narrow=1 窄面板 240px /
+ *   &bar=stop|continue|other 输入区上方状态条（活跃 / 续接倒计时 / 另一端在进行）/
+ *   &new=1 消息流「有新内容 ↓」
  * 底部黑条上左右箭头或键盘 ← → 切换变体。
  */
 import { PrototypeShell } from '@/components/prototype/classroom-chat/prototype-shell';
