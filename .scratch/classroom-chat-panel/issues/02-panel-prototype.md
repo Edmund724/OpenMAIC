@@ -1,7 +1,7 @@
 # P1：课堂对话面板原型
 
 Type: prototype
-Status: open
+Status: claimed
 Blocked by: —
 
 ## Question
@@ -23,4 +23,13 @@ Blocked by: —
 
 ## Answer
 
-（待解）
+（待解——等用户看过原型并表态）
+
+## Comments
+
+- 2026-09-22 原型首版已产出并提交（`98e4162c`）。路由 `app/prototype/classroom-chat/page.tsx`，组件在 `components/prototype/classroom-chat/`。
+  - 四个变体（底部黑条左右箭头或键盘 ← → 切换）：`current` 改造前 / `A` 两屏切换 / `B` 历史浮层 / `C` 上下分栏。
+  - 状态开关（顶部白条）：`&rec=1` 录音态 / `&cue=1` 轮到你了 / `&empty=1` 空对话 / `&fs=1` 全屏讲课 / `&narrow=1` 窄面板 240px。
+  - 打开方式：`pnpm dev` 后访问 `http://localhost:3000/prototype/classroom-chat`。
+  - 已验证：`npx tsc --noEmit` 通过、`npx eslint` 通过、四个变体与全部状态开关均能渲染出预期内容（curl 抓 HTML 核对）。
+  - 未验证：没有在真实浏览器里看过（WSL 里连不上 kimi-webbridge 守护进程，`127.0.0.1:10086` 不可达），所以观感层面的一切判断仍待用户。
