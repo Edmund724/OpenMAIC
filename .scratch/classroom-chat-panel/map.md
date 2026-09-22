@@ -29,7 +29,8 @@ Status: open
   - （G1）输入区上方多一条**细状态条**：有活跃 / soft-closing 会话时出现，承载"停止 / 继续（带倒计时）"与"另一端还有讨论在进行 · 回去"这类提示；消息流末尾的"已结束"分隔条只做状态展示。
   - （G1）未读 = 对话 tab 上一个琥珀点（未读 或 轮到你了，靠文案区分），学生把那一段切到前台即清零；全屏时落在右侧黑框的输入条上。
   - （G1）消息流**贴底才跟随**：手动上翻过则出"有新内容 ↓"。
-  - （G1）舞台侧保留物补齐：3 秒紫色气泡 + **讨论邀请卡**（锚在发起讨论的 agent 头像旁，不在被撤走的横条右栏里）。
+  - （G1）舞台侧保留物补齐：3 秒紫色气泡 + **讨论邀请卡**（锚在发起讨论的 agent 头像旁）。
+  - （G1 修正，2026-09-22）上面那条只对**老师**成立：老师锚在左栏 `teacherAvatarRef`（`roundtable/index.tsx:1176`），**学生 agent 的锚点却注册在横条右栏**（`studentAvatarRefs`，`:1920-1921`，学生版卡片 `:2046` 用它）——"整栏撤走"会把头像条与它的锚点一起撤掉，而 `ProactiveCard` 是 `fixed` 逐帧追锚点矩形（`components/chat/proactive-card.tsx:64-80`），锚点没了卡片就没有定位来源。**这条要重开**，学生 agent 那条邀请卡的落点未定。
 - **关键事实（已核查，带 file:line，实现时直接引用）**：
   - 输入区今天在 `components/roundtable/index.tsx`（非全屏 `1327-1384`；全屏 `812-860`），发送经 `PlaybackChromeRoot.tsx:1740-1795` → `ChatAreaRef.sendMessage`。**后端不用改**，是纯前端搬迁。
   - `components/chat/chat-area.tsx` 只有笔记/对话两个 tab；对话 tab 是 `SessionList`（会话卡片，不是消息流）。**面板里目前没有输入框**，这是新增而非替换。
@@ -46,7 +47,18 @@ Status: open
   - 面板里的消息气泡**没有 Markdown 渲染**（`chat-session.tsx:131` 裸文本 + `whitespace-pre-wrap`）；打字机由上游 `StreamBuffer` 以 30ms/字推进。
   - `activeSessionId` 今天的语义是"最近被谁激活过"，不是"学生正在看的对话"：写入点 `use-chat-sessions.ts:602`（重置）/`:1401`（createSession）/`:1508`（结束活跃会话）/`:2007`（讨论）/`:2108`/`:2156`（lecture 会话也抢）。消费者三处——`sendMessage` 的落点（`:1794-1796`，靠 `type === 'lecture'` 特判绕开）、`getActiveSessionType()`（`PlaybackChromeRoot.tsx:1912`，全屏停止按钮靠它判断在跑什么）、`retireActiveLiveRequest(activeSessionId)` 的 effect（`:2075`）。
   - 单活会话的判据是 `isOpenLiveSession`（`use-chat-sessions.ts:311-315`：type 为 qa/discussion 且 status 为 active/soft-closing）；`createSession` 建出来的就是 `status: 'active'` 的空会话（`:1400`），所以它不能直接当"新对话"用。
-  - 讨论邀请卡在 `components/chat/proactive-card.tsx`，经 portal 渲染、锚在老师 / 学生 agent 头像上（`roundtable/index.tsx:267-270`、`:988`、`:1113`、`:2046`），不在横条右栏被撤走的控件之列；引擎会停在 `currentTrigger` 上等学生点（`lib/playback/engine.ts:264-270`、`:347-349`）。
+  - 讨论邀请卡在 `components/chat/proactive-card.tsx`，经 portal 渲染、`fixed` 逐帧追锚点矩形（`:64-80`、`:248`），锚点是老师 / 学生 agent 的头像（`roundtable/index.tsx:267-272`、`:988`、`:1113`、`:2046`）——老师锚在左栏，**学生 agent 锚在横条右栏**（`studentAvatarRefs` 注册点 `:1920-1921`）。引擎会停在 `currentTrigger` 上等学生点（`lib/playback/engine.ts:264-270`、`:347-349`）。
+  - **device KV**：默认 scope 是 `'account'`，**必须显式传 `'device'`**（`packages/@openmaic/storage/src/kv/types.ts:58`，未知 scope 抛错 `:83-93`）；浏览器落盘键是 `maic:<scope>:<key>`（`kv/browser.ts:14-15`）；形状样板 `lib/document-store/current-scene.ts:13-75`；stage 删除清理钩子在 `lib/utils/stage-storage.ts:631-645` 之后再补一行，前缀批量清先例 `lib/pbl/v2/runtime/drain.ts:234-240`，守卫测试 `tests/runtime/stage-delete-wiring.test.ts:97-104`。
+  - **会话字段挂不住**：`lib/utils/chat-storage-core.ts` 的 `statePayload`（`:316-336`）、`isStatePayload`（`:353-379`）、`foldRecords`（`:414-431`）都是显式字段重建，未知字段过不了持久化往返（`normalizeSession` `:232-242` 只在内存里保留）。
+  - **未读没有现成字段**：引擎往会话写内容的汇集口是 `createBufferForSession`（`use-chat-sessions.ts:905-1127`）里那 4 个 `setSessions`（`:933`/`:968`/`:1011`/`:2181`），加上 `streamingSessionIdRef`（`:568`）；`updatedAt` 不可靠（`:995-997` 明确不随 tick 更新）。
+  - **续写旧对话只差一个判据**：`use-chat-sessions.ts:1794-1796`（是不是 `completed`）+ 复用同一个 `sessionId`；`:1903` 会自动带上那一段的 `directorState`，不需要新管道。
+  - **面板结构**：对话 tab 的"列表"与"消息流"是同一套 DOM（卡片内嵌 `ChatSessionComponent`，`session-list.tsx:120-141`）——常驻对话要把消息流从卡片里提出来；hook 返回值 `:2269-2293` 要新增 `displaySessionId`（今天它不出 hook）；`chat-area.tsx`／`session-list.tsx` **零专属测试**。
+  - **输入区接线**：状态机全在 `roundtable/index.tsx` 根部（`isInputOpen:222`／`isVoiceOpen:223`／`inputValue:224`／发送冷却 `:249-250`），与非全屏 / 全屏两个分支共用；Roundtable 不持元素引用草稿（只有 `elementReferencePill` prop + `onClearElementReference`），"引用课件"按钮住在画布工具栏（`canvas-toolbar.tsx:430-452`，经 `roundtable:706-709` 透传）；麦克风是自绘 + `useAudioRecorder`（`index.tsx:378-401`），`SpeechButton` 今天没被课堂用。
+  - `onMessageSend`（`PlaybackChromeRoot.tsx:1740-1795`）那 11 个副作用全是"学生发言对引擎的语义"（打断、TTS 清理、soft-close、切 tab、thinking），**一个都不该搬进 composer**；该搬的只有输入态。`sendMessageWithElementReference` 在 `:302-327`。
+  - **T/V/Escape 的现役实现在 `roundtable/index.tsx:452-517`**（`configs/hotkey.ts` 只是文档）：焦点在输入框内时 T/V 失效（`:466-470`），Escape 带 `stopPropagation` 挡全屏退出；`PlaybackChromeRoot.tsx:1461-1551` 是另一套全局键（`:1447-1459` 过滤输入目标）。
+  - **全屏"右侧黑框"今天不存在**：课件按 `aspect-[16/9] h-full` 居中（`canvas-area.tsx:328-335`），左右余白就是黑框；输入条是 `fixed` + 按 `chatCollapsed/chatAreaWidth` 算偏移（`roundtable:770`/`:794`/`:808`/`:951`）；全屏强制收起在 `PlaybackChromeRoot.tsx:613-614`；`ChatArea` 是 `stageRef` 内的 flex 兄弟（`:1885-1954`），展开会挤窄课件区而不是覆盖。
+  - **会失效的 e2e 是三个**（都靠 `T` + placeholder `Type your message...` 定位输入框）：`classroom-interaction.spec.ts:165-268`、`interactive-state-reference.spec.ts:93-99`／`:190-196`、`interactive-component-reference.spec.ts:207-213`；jsdom 那条 `tests/components/edit/playback-chrome-root-element-reference-owner.test.ts` 把输入口与 pill 都 mock 在 Roundtable 里（`:195-237`），搬走后 `click('send')` 与 `owner-pill` 会直接抛。
+  - **验证命令**：`lint`=eslint 全仓；`test`=vitest（只跑 `tests/**/*.test.ts`）；`check:i18n-keys`=12 个 locale 与 `en-US.json` 的叶子键严格对齐；`test:e2e`=playwright（自己起服务、端口 3002、`reuseExistingServer`）；CI 是 `check`/`lint`/`tsc --noEmit`/`check:i18n-keys` 并行后跑 `test`。横条 192px 与面板宽度上限 560 **都没有测试守卫**；`lib/edit/contain-box.ts:55` 的 `PLAYBACK_CHROME_PX = 80 + 168` 是与 192 不一致的影子常量（只喂工作台面板宽度，改横条不会让它变红）。
   - 停止 / 继续按钮今天在展开的会话卡片末尾（`chat-session.tsx:353-384`；`canEnd` = qa/discussion 且 active/soft-closing，`:174-175`），"已结束"分隔条在 `:330-347`。
   - **D1 的前提是错的**：`components/scene-renderers/InteractiveIframeHost.tsx` 不渲染 `PlaybackChromeRoot`（那句是把 `:124` 的 doc 注释读成了渲染）。每个 stage 只有一条挂载链、一个 `useChatSessions` 实例：`classroom/ClassroomSurface.tsx:571` → `stage.tsx:355`（只有 playback 分支挂）→ `PlaybackChromeRoot.tsx:1886` → `chat-area.tsx:138`。守卫测试：`tests/chat/chat-session-mount-graph.test.ts`。
   - 但双实例的**机制**是真的（jsdom 探针复现）：`use-chat-sessions.ts:559-566` 的 `sessions`／`activeSessionId` 是各自独立的 React state（只在挂载时从 `useStageStore.getState().chats` 播种一次），`:626-630` 每次变化整体写回 `setChats`（无合并）→ 第二个实例会把第一个的会话从持久化列表里抹掉（`chats` 只在 `getState()` 里读，不是订阅）。**结论：不必把会话状态下沉到 zustand**；真需要时的便宜后路是"写回只允许 owner、secondary 只读订阅"。
@@ -69,6 +81,7 @@ Status: open
 - 全屏右侧黑框的最终宽度与窄栏形态的取舍（原型用 268px + 图标化按钮）——待 S1 定稿
 - G1 新定的两个画面原型里没画过（输入区上方的状态条、"有新内容 ↓"）——存在已定，观感待 S1 前在原型里补一眼
 - 全屏时讨论邀请卡经 `portalContainer` 渲进全屏容器，会不会压到幻灯片区（与 P1 定的"课件区不留悬浮件"对不上）——S1 定稿前核一眼
+- **学生 agent 发起的讨论邀请卡住哪**：它的锚点（`studentAvatarRefs`）就在 P1 要整栏撤走的横条右栏里，`ProactiveCard` 没有锚点就没有定位来源；老师那条锚在左栏、不受影响。要么保留右栏上部的学生 agent 头像条，要么把学生那条改锚/改住别处——待定（会同时修订 P1 的"整栏撤走"与 G1 的"邀请卡留在舞台侧"）
 
 <!-- 原型已把下面六项定型，它们随 S1 写进规格，不再单独立票：
      输入区视觉（文本框 + 一行按钮：引用课件 / 说话 / 发送；录音态 = 波形 + 实时文字 + 取消/完成）
