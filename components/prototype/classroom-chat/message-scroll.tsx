@@ -47,10 +47,12 @@ export function MessageScroll({
   session,
   empty,
   newContent,
+  typing,
 }: {
   readonly session: MockSession;
   readonly empty: boolean;
   readonly newContent: boolean;
+  readonly typing?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [atBottom, setAtBottom] = useState(!newContent);
@@ -81,7 +83,7 @@ export function MessageScroll({
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
       <div ref={ref} className="min-h-0 flex-1 overflow-y-auto">
-        <MessageFlow session={shown} empty={empty} />
+        <MessageFlow session={shown} empty={empty} typing={typing} />
       </div>
       {newContent && !atBottom && (
         <button

@@ -13,9 +13,12 @@ import { GROUP_LABELS, type MockMessage, type MockSession } from './mock-data';
 export function MessageFlow({
   session,
   empty,
+  typing = false,
 }: {
   readonly session: MockSession;
   readonly empty: boolean;
+  /** 引擎正在生成时才在末尾出三点流式指示（照真实产品：`chat-session.tsx:70-101`） */
+  readonly typing?: boolean;
 }) {
   if (empty) {
     return (
@@ -34,10 +37,18 @@ export function MessageFlow({
       {session.messages.map((message) => (
         <MessageRow key={message.id} message={message} />
       ))}
-      <div className="flex items-center gap-1.5 pl-1">
-        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-purple-400" />
-        <span className="text-[10px] text-gray-400">张老师正在输入…</span>
-      </div>
+      {typing && (
+        // 三点流式指示：照真实产品 `chat-session.tsx:71-100`（首字前的那三点），不出文字行
+        <div className="flex items-center gap-1.5 px-1 py-1.5">
+          {[0, 200, 400].map((delay) => (
+            <span
+              key={delay}
+              className="h-1.5 w-1.5 animate-pulse rounded-full bg-purple-400/70"
+              style={{ animationDelay: `${delay}ms` }}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

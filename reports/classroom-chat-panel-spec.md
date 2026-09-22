@@ -108,7 +108,7 @@ composerDrafts: { get(id: string): string; set(id: string, text: string): void }
 ## 5. 改造 `components/chat/chat-area.tsx`
 
 - 对话 tab 从"卡片列表"改成三段：**常驻消息流 + 状态条 + composer**。
-  - 消息流：把 `ChatSessionComponent` 从卡片里提出来，渲染 `displaySession`；无 display → 空对话屏（图标 + "开始一段新对话"，用现键 `chat.startConversation`）。贴底跟随沿用 `chat-session.tsx:182-218` 的 `isAtBottomRef` 判定（距底 < 24px 算贴底）；不贴底时在消息流底部悬浮一枚深色胶囊 **"有新内容 ↓"**（水平居中、离底 12px），点它落到底并恢复跟随，落到底即自行消失（观感以原型 `?new=1` 为准）。
+  - 消息流：把 `ChatSessionComponent` 从卡片里提出来，渲染 `displaySession`；无 display → 空对话屏（图标 + "开始一段新对话"，用现键 `chat.startConversation`）。贴底跟随沿用 `chat-session.tsx:182-218` 的 `isAtBottomRef` 判定（距底 < 24px 算贴底）；不贴底时在消息流底部悬浮一枚深色胶囊 **"有新内容 ↓"**（水平居中、离底 12px），点它落到底并恢复跟随，落到底即自行消失（观感以原型 `?new=1` 为准）。流式指示沿用现成实现——首字前的三点（`chat-session.tsx:70-101`）与末字后的光标点（`:132-134`），**只在引擎生成期间出现，不新增"正在输入"这类文字行**。
   - 状态条：坐在 **composer 正上方、同一片 footer 内** 的一条细带（浅灰底 + 1px 描边、圆角、高约 24px；左起一枚图标 + 一行小字，右端一枚描边胶囊按钮），有活跃 / soft-closing 会话时出现，三种形态：
     - 活跃：紫点 + "张老师正在回答…" + **停止**（`endSession` + `onStopSession`，现 `:181-200`）
     - soft-closing：对话图标 + "这段讨论还有 12s 结束" + **继续**（`continueSoftClosingSession`，现 `:202-205`）

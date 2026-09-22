@@ -54,6 +54,7 @@ function ConversationPane({ shared }: { readonly shared: PanelShared }) {
         session={shared.currentSession}
         empty={shared.empty}
         newContent={shared.flags.newContent}
+        typing={shared.flags.statusBar === 'stop'}
       />
       <div className="shrink-0 border-t border-gray-100 p-2">
         <StatusBar
@@ -191,7 +192,11 @@ export function VariantCurrent({ shared }: { readonly shared: PanelShared }) {
             </button>
             {expanded === session.id && (
               <div className="border-t border-gray-100/50 px-2 pt-1 pb-2">
-                <MessageFlow session={session} empty={false} />
+                <MessageFlow
+                  session={session}
+                  empty={false}
+                  typing={shared.flags.statusBar === 'stop'}
+                />
               </div>
             )}
           </div>
