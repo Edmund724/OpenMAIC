@@ -1,7 +1,7 @@
 # S1：撰写实现级设计规格
 
 Type: task
-Status: open
+Status: resolved
 Blocked by: 02, 03, 05
 
 ## Question
@@ -21,7 +21,9 @@ HITL：规格完成后需用户确认才算达成终点。
 
 ## Answer
 
-（待用户确认后才算达成终点）
+**2026-09-22 用户确认，S1 达成，本 effort 终点达成。**确认过的规格：`reports/classroom-chat-panel-spec.md`。
 
-- 2026-09-22 规格初稿已产出：`reports/classroom-chat-panel-spec.md`——13 节：模块与接缝 / 新增模块（composer、历史浮层、`display-session.ts` 深模块、两个纯函数）/ `use-chat-sessions` 与 `chat-area`、`PlaybackChromeRoot`、`roundtable` 的改造点（带 file:line）/ 快捷键 / i18n 新键 / 跟随改与新增的测试 / 不做的事 / 验证方式 / 落地顺序。
-- 待确认时一并看的两处：规格里标注"原型没画过的两个画面"（输入区上方状态条、"有新内容 ↓"）尚未在原型里补看；全屏黑框宽度取了原型值 268px。
+- 规格 13 节：模块与接缝 / 新增模块（composer、历史浮层、`display-session.ts` 深模块、两个纯函数）/ `use-chat-sessions` 与 `chat-area`、`PlaybackChromeRoot`、`roundtable` 的改造点（带 file:line）/ 快捷键 / i18n 新键 / 跟随改与新增的测试 / 不做的事 / 验证方式 / 落地顺序。
+- 确认前补画并看过两处 P1 没画过的画面（状态条三态、消息流「有新内容 ↓」，见 02 号票 2026-09-22 补画条）；确认后清掉原型里一处误导（"张老师正在输入…"文字行 → 三点、只活跃态出现）。
+- 全屏黑框定案：**恒预留 268px 一列**（不做"贴余白"），幻灯片区在剩余宽度里 contain；讨论邀请卡（全屏）**不搬动**（会盖幻灯片下缘那条带子，与今天一致，且是自动跳过的短暂件）。
+- 实现留给规格之后的会话；本 effort 不写产品代码。

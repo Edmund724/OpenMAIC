@@ -14,7 +14,7 @@ Status: open
 - 领域：Next.js + React + Tailwind 的 AI 课堂（OpenMAIC fork）。学生看课件（左）、问 AI（右）。桌面场景。
 - **工作方式**：grilling 票开场调 Skill: grilling + domain-modeling；research 票调 Skill: research；原型票调 Skill: prototype。
 - **用户偏好**：中文；表达简洁；每行改动可溯源到请求。
-- **本 effort 携带执行**：P1 产出可点原型（假数据，不碰课堂逻辑），S1 产出规格。不写产品代码。**规格已产出：`reports/classroom-chat-panel-spec.md`（待用户确认）。**
+- **本 effort 携带执行**：P1 产出可点原型（假数据，不碰课堂逻辑），S1 产出规格。不写产品代码。**规格已定稿并经用户确认（2026-09-22）：`reports/classroom-chat-panel-spec.md`。本 effort 的终点达成。**
 - **已拍板的形状**（grilling 三轮的结论，细节见各票）：
   - 输入区**常驻**在对话 tab 底部；视觉只借参考图的布局，配色跟现有白/紫半透明圆角；面板宽度上限 560 → 640，最小 240 不动（输入区自适应折行）。
   - 语音**点按切换**；识别完**先落进输入框**让学生确认，不再自动发送。
@@ -57,7 +57,7 @@ Status: open
   - **输入区接线**：状态机全在 `roundtable/index.tsx` 根部（`isInputOpen:222`／`isVoiceOpen:223`／`inputValue:224`／发送冷却 `:249-250`），与非全屏 / 全屏两个分支共用；Roundtable 不持元素引用草稿（只有 `elementReferencePill` prop + `onClearElementReference`），"引用课件"按钮住在画布工具栏（`canvas-toolbar.tsx:430-452`，经 `roundtable:706-709` 透传）；麦克风是自绘 + `useAudioRecorder`（`index.tsx:378-401`），`SpeechButton` 今天没被课堂用。
   - `onMessageSend`（`PlaybackChromeRoot.tsx:1740-1795`）那 11 个副作用全是"学生发言对引擎的语义"（打断、TTS 清理、soft-close、切 tab、thinking），**一个都不该搬进 composer**；该搬的只有输入态。`sendMessageWithElementReference` 在 `:302-327`。
   - **T/V/Escape 的现役实现在 `roundtable/index.tsx:452-517`**（`configs/hotkey.ts` 只是文档）：焦点在输入框内时 T/V 失效（`:466-470`），Escape 带 `stopPropagation` 挡全屏退出；`PlaybackChromeRoot.tsx:1461-1551` 是另一套全局键（`:1447-1459` 过滤输入目标）。
-  - **全屏"右侧黑框"今天不存在**：课件按 `aspect-[16/9] h-full` 居中（`canvas-area.tsx:328-335`），左右余白就是黑框；输入条是 `fixed` + 按 `chatCollapsed/chatAreaWidth` 算偏移（`roundtable:770`/`:794`/`:808`/`:951`）；全屏强制收起在 `PlaybackChromeRoot.tsx:613-614`；`ChatArea` 是 `stageRef` 内的 flex 兄弟（`:1885-1954`），展开会挤窄课件区而不是覆盖。
+  - **全屏"右侧黑框"今天不存在**：课件按 `aspect-[16/9] h-full` 居中（`canvas-area.tsx:328-335`），左右余白就是黑框；输入条是 `fixed` + 按 `chatCollapsed/chatAreaWidth` 算偏移（`roundtable:770`/`:794`/`:808`/`:951`）；全屏强制收起在 `PlaybackChromeRoot.tsx:613-614`；`ChatArea` 是 `stageRef` 内的 flex 兄弟（`:1885-1954`），展开会挤窄课件区而不是覆盖。**S1 定案**：全屏恒预留右侧一列（**268px** + `shrink-0`），课件在剩余宽度里 contain——因为"黑框"就是视口余白，宽高比不到约 2.03:1 时它连 268px 都没有（16:9 屏上正好为 0）；代价是 16:9 上课件约缩 14%、上下留黑边。**讨论邀请卡（全屏）不搬动**：它锚在 `fixed bottom-5` 的 dock 头像上（`roundtable:950`/`:988`），按视口坐标落在锚点上方 12px（`proactive-card.tsx:63-80`），会盖住幻灯片下缘那条带子——与今天一致、且是会自动跳过的短暂件；"课件区不留悬浮件"只针对常驻输入条。
   - **会失效的 e2e 是三个**（都靠 `T` + placeholder `Type your message...` 定位输入框）：`classroom-interaction.spec.ts:165-268`、`interactive-state-reference.spec.ts:93-99`／`:190-196`、`interactive-component-reference.spec.ts:207-213`；jsdom 那条 `tests/components/edit/playback-chrome-root-element-reference-owner.test.ts` 把输入口与 pill 都 mock 在 Roundtable 里（`:195-237`），搬走后 `click('send')` 与 `owner-pill` 会直接抛。
   - **验证命令**：`lint`=eslint 全仓；`test`=vitest（只跑 `tests/**/*.test.ts`）；`check:i18n-keys`=12 个 locale 与 `en-US.json` 的叶子键严格对齐；`test:e2e`=playwright（自己起服务、端口 3002、`reuseExistingServer`）；CI 是 `check`/`lint`/`tsc --noEmit`/`check:i18n-keys` 并行后跑 `test`。横条 192px 与面板宽度上限 560 **都没有测试守卫**；`lib/edit/contain-box.ts:55` 的 `PLAYBACK_CHROME_PX = 80 + 168` 是与 192 不一致的影子常量（只喂工作台面板宽度，改横条不会让它变红）。
   - 停止 / 继续按钮今天在展开的会话卡片末尾（`chat-session.tsx:353-384`；`canEnd` = qa/discussion 且 active/soft-closing，`:174-175`），"已结束"分隔条在 `:330-347`。
@@ -75,14 +75,12 @@ Status: open
 - [G1：面板与课堂引擎的边界行为](issues/03-panel-engine-boundary.md): "显示中的对话"（新词 `displaySessionId`）与"活跃会话"分开，抢前台的判据是**"谁的动作"**——学生发起的（点加入讨论、发消息）才切前台并关浮层，引擎自己发起的（soft-close 复活、切场景结束、lecture 进场）只出未读提示。"新对话"= 纯草稿位（不落会话、不动活跃会话）；点开旧对话只换显示、真发消息时才结束旧的活跃会话并接管；续写旧对话 = **复活那一段会话本身**并带上它的 `directorState`；停止 / 继续搬进输入框上方的状态条；未读只用一个琥珀点、切到前台即清零；被引擎就地结束就安静收场；草稿按会话各留一份；lecture 不再抢显示指针；列表去掉逐条时间戳；讨论邀请卡留在舞台侧；消息流贴底才跟随。理由与 file:line 见票
 - [T1：验证双实例会话状态竞争](issues/04-verify-double-instance.md): **D1 的前提不成立**——`InteractiveIframeHost` 不渲染 `PlaybackChromeRoot`（原文把一句 doc 注释读成了渲染），每个 stage 只有一条挂载链、一个 `useChatSessions` 实例，**不必把会话状态下沉到 zustand**。但机制是真的：真有第二个实例时，`:626-630` 的整体写回会把对方的会话从 `useStageStore.chats` 里抹掉（jsdom 探针复现）。产出两个测试——`tests/chat/chat-session-mount-graph.test.ts`（守卫：第二个挂载点出现即红）、`tests/chat/chat-session-double-instance-hazard.test.ts`（复现，绿＝机制成立）。重开条件：新增第二个挂载点，或把课堂挂进第二个 React root
 - [G2：隐藏列表与"当前对话"的存放边界](issues/05-history-storage-boundary.md): **不做隐藏、不做删除**（2026-09-22 用户决定，条目菜单只留"改名"；原"删除做成本地隐藏"作废）。剩下唯一一条：**"当前显示的对话"持久化到 device KV 单键** `display-session:${stageId}:${learnerKey}`（scope 显式传 `'device'`，形状照 `lib/document-store/current-scene.ts`；stage 删除时的清理挂在 `lib/utils/stage-storage.ts:631-645` 之后），指针指向的会话不存在时回落"最新一段"（按 `createdAt` 排序），再回空对话屏。T1 的落点：不下沉 zustand，状态仍留在 hook 里、只写穿这一个键
+- [S1：实现级规格](issues/06-write-spec.md): `reports/classroom-chat-panel-spec.md` **经用户确认（2026-09-22），本 effort 终点达成**。四条接缝：`onMessageSend` 的 11 个副作用原地不动（composer 只交字）、输入态随 composer、未读是 hook 的派生结论、只为一个真实变体（`panel|fullscreen`）开接缝。落地顺序 8 步，测试口径"没有新增失败"。确认时补定的两条：全屏**恒预留 268px 一列**（不贴余白）、讨论邀请卡（全屏）**不搬动**
 
 ## Not yet specified
 
-<!-- 见 "Fog of war"：在范围内、但还看不清、不足以立票的东西 -->
+<!-- 见 "Fog of war"：在范围内、但还看不清、不足以立票的东西。规格定稿时三条迷雾全部毕业：268px 的取舍 → 恒预留一列；两处没画过的画面 → 已补画并确认；邀请卡 portal 落点 → 已核（会压幻灯片区下缘，与今天一致，决定不搬动） -->
 
-- 全屏右侧黑框的最终宽度与窄栏形态的取舍（原型用 268px + 图标化按钮）——待 S1 定稿
-- G1 新定的两个画面原型里没画过（输入区上方的状态条、"有新内容 ↓"）——存在已定，观感待 S1 前在原型里补一眼
-- 全屏时讨论邀请卡经 `portalContainer` 渲进全屏容器，会不会压到幻灯片区（与 P1 定的"课件区不留悬浮件"对不上）——S1 定稿前核一眼
 
 <!-- 原型已把下面六项定型，它们随 S1 写进规格，不再单独立票：
      输入区视觉（文本框 + 一行按钮：引用课件 / 说话 / 发送；录音态 = 波形 + 实时文字 + 取消/完成）
