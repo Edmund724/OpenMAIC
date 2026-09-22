@@ -37,6 +37,8 @@ export interface ComposerProps {
   readonly onFinishRecording: () => void;
   readonly onSend: () => void;
   readonly floating?: boolean;
+  /** 窄栏形态：按钮收成图标，供全屏时塞进右侧黑框。 */
+  readonly compact?: boolean;
 }
 
 export function Composer({
@@ -49,9 +51,16 @@ export function Composer({
   onFinishRecording,
   onSend,
   floating = false,
+  compact = false,
 }: ComposerProps) {
   return (
-    <div className={cn('relative', floating && 'w-[min(480px,calc(100vw-3rem))]')}>
+    <div
+      className={cn(
+        'relative',
+        floating && !compact && 'w-[min(480px,calc(100vw-3rem))]',
+        compact && 'w-full',
+      )}
+    >
       {cueUser && !recording && (
         <div className="mb-1.5 flex justify-center">
           <span className="rounded-full bg-amber-500 px-2.5 py-0.5 text-[10px] font-bold text-white shadow-sm">
@@ -104,7 +113,7 @@ export function Composer({
               }
             }}
             rows={1}
-            placeholder="问点什么…（回车发送，Shift+回车换行）"
+            placeholder={compact ? '问点什么…' : '问点什么…（回车发送，Shift+回车换行）'}
             className="max-h-24 w-full resize-none bg-transparent px-3 pt-2.5 pb-1 text-sm text-gray-900 outline-none placeholder:text-gray-400"
           />
           <div className="flex items-center gap-1 px-2 pb-2">
@@ -113,7 +122,7 @@ export function Composer({
               className="flex h-7 items-center gap-1 rounded-full border border-gray-200 px-2 text-[11px] text-gray-500 hover:bg-gray-50 hover:text-gray-700"
             >
               <BookOpen className="h-3.5 w-3.5" />
-              引用课件
+              {!compact && '引用课件'}
             </button>
             <button
               onClick={onToggleRecording}
@@ -126,7 +135,7 @@ export function Composer({
               )}
             >
               <Mic className="h-3.5 w-3.5" />
-              说话
+              {!compact && '说话'}
             </button>
             <div className="flex-1" />
             <button

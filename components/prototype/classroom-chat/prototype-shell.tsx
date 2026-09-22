@@ -88,7 +88,7 @@ export function PrototypeShell({ params }: { readonly params: Record<string, str
     <>
       <StateControls params={params} flags={flags} />
       {flags.fullscreen ? (
-        <FullscreenStage composer={<Composer {...composer} floating />} />
+        <FullscreenStage composer={<Composer {...composer} compact />} />
       ) : (
         <ClassroomFrame
           showStudentControls={variant === 'current'}

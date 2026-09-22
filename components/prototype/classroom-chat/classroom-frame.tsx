@@ -18,7 +18,6 @@ import {
   MonitorPlay,
   Settings,
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
 import { AvatarDisplay } from '@/components/ui/avatar-display';
 import { COURSE } from './mock-data';
 
@@ -157,11 +156,15 @@ export function ClassroomFrame({
   );
 }
 
-/** 全屏讲课：右侧面板被强制收起，舞台上留一套输入条——这就是 Q8(b) 的取舍。 */
+/**
+ * 全屏讲课：右侧面板被强制收起，输入条移进右侧黑框（幻灯片区之外），
+ * 因此永远不会遮挡课件内容——任何屏幕比例下都成立。
+ */
 export function FullscreenStage({ composer }: { readonly composer: ReactNode }) {
   return (
-    <div className="relative h-screen w-full overflow-hidden bg-gray-900 text-white">
-      <div className="absolute inset-0 flex items-center justify-center p-16">
+    <div className="flex h-screen w-full overflow-hidden bg-gray-900 text-white">
+      {/* 幻灯片区：只放课件，不再叠任何悬浮件 */}
+      <div className="relative flex min-w-0 flex-1 items-center justify-center p-8">
         <div className="flex aspect-video w-full max-w-[1100px] flex-col items-center justify-center rounded-xl bg-white shadow-2xl">
           <div className="text-xs tracking-wide text-gray-400">{COURSE.name}</div>
           <div className="mt-2 text-4xl font-semibold text-gray-800">{COURSE.slide}</div>
@@ -178,24 +181,22 @@ export function FullscreenStage({ composer }: { readonly composer: ReactNode }) 
         </div>
       </div>
 
-      <div className="absolute top-4 right-4 flex items-center gap-2">
-        <span className="rounded-full bg-white/10 px-3 py-1 text-[11px] backdrop-blur">
-          第 {COURSE.slideIndex} / {COURSE.slideTotal} 页
+      {/* 右侧黑框：全屏时的全部控件都住这里，课件区一个悬浮件都没有 */}
+      <div className="flex w-[268px] shrink-0 flex-col gap-3 border-l border-white/10 p-3">
+        <div className="flex items-center justify-between gap-2">
+          <span className="rounded-full bg-white/10 px-3 py-1 text-[11px]">
+            第 {COURSE.slideIndex} / {COURSE.slideTotal} 页
+          </span>
+          <button className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 hover:bg-white/20">
+            <MonitorPlay className="h-4 w-4" />
+          </button>
+        </div>
+        <span className="rounded-lg bg-white/5 px-2 py-1.5 text-[10px] leading-tight text-white/50">
+          全屏时右侧面板不可达 · 输入条放这里，不遮挡课件
         </span>
-        <button className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 backdrop-blur hover:bg-white/20">
-          <MonitorPlay className="h-4 w-4" />
-        </button>
-      </div>
-
-      <div className="pointer-events-none absolute inset-x-0 bottom-16 flex flex-col items-center gap-3">
-        <div className={cn('pointer-events-auto')}>{composer}</div>
-        <span className="rounded-full bg-white/10 px-3 py-1 text-[10px] text-white/70 backdrop-blur">
-          全屏时右侧面板不可达 · 舞台上保留这一套输入条
-        </span>
-      </div>
-
-      <div className="absolute inset-x-0 bottom-3 flex justify-center">
-        <div className="flex items-center gap-2 rounded-full border border-white/10 bg-black/60 px-3 py-1.5 backdrop-blur-xl">
+        <div className="flex-1" />
+        <div>{composer}</div>
+        <div className="flex items-center justify-center gap-2 pt-0.5">
           <button className="flex h-7 w-7 items-center justify-center rounded-full text-white/70 hover:bg-white/10">
             <Mic className="h-4 w-4" />
           </button>
