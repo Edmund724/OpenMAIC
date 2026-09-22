@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ClassroomAlreadyExistsError } from '@/lib/server/classroom-storage';
 import type { GenerateClassroomInput } from '@/lib/server/classroom-generation';
 
@@ -117,6 +117,12 @@ async function generateWithProgress(input: Partial<GenerateClassroomInput> = {})
 }
 
 describe('classroom scene generation retries', () => {
+  // Load the module graph before the first case rather than inside it: the first
+  // case must not spend its timeout on a transform while the suite is loaded.
+  beforeAll(async () => {
+    await import('@/lib/server/classroom-generation');
+  });
+
   beforeEach(() => {
     for (const mock of Object.values(mocks)) {
       mock.mockReset();
@@ -173,15 +179,26 @@ describe('classroom scene generation retries', () => {
   });
 
   it('retries an empty scene content result before skipping the scene', async () => {
-    mocks.generateSceneContent.mockResolvedValueOnce(null).mockResolvedValueOnce(slideContent);
+    // The retry backs off on a real `setTimeout` (1s base, doubling). Driving the
+    // clock keeps the case at a fixed cost instead of competing with the rest of
+    // the suite for wall-clock time — and a case that times out leaves its retry
+    // loop running, which then calls these mocks during later cases.
+    vi.useFakeTimers();
+    try {
+      mocks.generateSceneContent.mockResolvedValueOnce(null).mockResolvedValueOnce(slideContent);
 
-    const { result, progress } = await generateWithProgress();
+      const generation = generateWithProgress();
+      await vi.runAllTimersAsync();
+      const { result, progress } = await generation;
 
-    expect(result.scenesCount).toBe(1);
-    expect(mocks.generateSceneContent).toHaveBeenCalledTimes(2);
-    expect(progress.some((event) => event.message.includes('Retrying scene 1/1 content'))).toBe(
-      true,
-    );
+      expect(result.scenesCount).toBe(1);
+      expect(mocks.generateSceneContent).toHaveBeenCalledTimes(2);
+      expect(progress.some((event) => event.message.includes('Retrying scene 1/1 content'))).toBe(
+        true,
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('forwards classroom thinking config to scene retry LLM calls', async () => {
@@ -210,18 +227,25 @@ describe('classroom scene generation retries', () => {
   });
 
   it('retries retryable action generation errors', async () => {
-    mocks.generateSceneContent.mockResolvedValue(slideContent);
-    mocks.generateSceneActions
-      .mockRejectedValueOnce(Object.assign(new Error('rate limited'), { statusCode: 429 }))
-      .mockResolvedValueOnce([]);
+    vi.useFakeTimers();
+    try {
+      mocks.generateSceneContent.mockResolvedValue(slideContent);
+      mocks.generateSceneActions
+        .mockRejectedValueOnce(Object.assign(new Error('rate limited'), { statusCode: 429 }))
+        .mockResolvedValueOnce([]);
 
-    const { result, progress } = await generateWithProgress();
+      const generation = generateWithProgress();
+      await vi.runAllTimersAsync();
+      const { result, progress } = await generation;
 
-    expect(result.scenesCount).toBe(1);
-    expect(mocks.generateSceneActions).toHaveBeenCalledTimes(2);
-    expect(progress.some((event) => event.message.includes('Retrying scene 1/1 actions'))).toBe(
-      true,
-    );
+      expect(result.scenesCount).toBe(1);
+      expect(mocks.generateSceneActions).toHaveBeenCalledTimes(2);
+      expect(progress.some((event) => event.message.includes('Retrying scene 1/1 actions'))).toBe(
+        true,
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('does not retry non-retryable action generation errors', async () => {

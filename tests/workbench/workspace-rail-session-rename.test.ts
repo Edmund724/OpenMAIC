@@ -40,7 +40,7 @@ const roots: Root[] = [];
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
-beforeAll(() => {
+beforeAll(async () => {
   if (!globalThis.PointerEvent) vi.stubGlobal('PointerEvent', MouseEvent);
   vi.stubGlobal(
     'ResizeObserver',
@@ -50,6 +50,9 @@ beforeAll(() => {
       disconnect() {}
     },
   );
+  // Load the rail's module graph before the first case rather than inside it: a
+  // case must not spend its timeout on a transform while the suite is loaded.
+  await import('@/components/workbench/workspace/WorkspaceRail');
 });
 
 afterEach(() => {
@@ -131,21 +134,46 @@ async function renderRail(): Promise<{ onRenameSession: ReturnType<typeof vi.fn>
 
 const byTestId = (id: string) => document.querySelector<HTMLElement>(`[data-testid="${id}"]`);
 
+/**
+ * Wait until a test id exists, then return it.
+ *
+ * The rail resolves its tab and its row order in effects after mount, and under
+ * a loaded suite that work can land after the enclosing `act` has drained. So
+ * assert on a node that was waited for, not on one that was assumed.
+ */
+async function waitForTestId(id: string, label: string): Promise<HTMLElement> {
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    const element = byTestId(id);
+    if (element) return element;
+    await act(async () => {
+      await new Promise((resolve) => setImmediate(resolve));
+    });
+  }
+  const element = byTestId(id);
+  expect(element, label).not.toBeNull();
+  return element as HTMLElement;
+}
+
 async function openRename(sessionId: string): Promise<HTMLInputElement> {
-  const trigger = byTestId(`pro-nav-more-session-${sessionId}`);
-  expect(trigger, `chat row ${sessionId} must have a ⋯ menu`).not.toBeNull();
+  const trigger = await waitForTestId(
+    `pro-nav-more-session-${sessionId}`,
+    `chat row ${sessionId} must have a ⋯ menu`,
+  );
   await act(async () => {
-    trigger!.dispatchEvent(
+    trigger.dispatchEvent(
       new PointerEvent('pointerdown', { bubbles: true, button: 0, cancelable: true }),
     );
-    trigger!.click();
+    trigger.click();
   });
-  const item = byTestId(`pro-nav-more-session-${sessionId}-rename`);
-  expect(item, 'the chat row menu must offer a rename item').not.toBeNull();
-  await act(async () => item!.click());
-  const input = byTestId(`pro-nav-session-rename-${sessionId}-input`);
-  expect(input, 'the row must become an input in place').not.toBeNull();
-  return input as HTMLInputElement;
+  const item = await waitForTestId(
+    `pro-nav-more-session-${sessionId}-rename`,
+    'the chat row menu must offer a rename item',
+  );
+  await act(async () => item.click());
+  return (await waitForTestId(
+    `pro-nav-session-rename-${sessionId}-input`,
+    'the row must become an input in place',
+  )) as HTMLInputElement;
 }
 
 async function typeInto(input: HTMLInputElement, value: string): Promise<void> {
@@ -167,7 +195,9 @@ async function submit(sessionId: string): Promise<void> {
 describe('renaming a chat from its row', () => {
   it('shows the name the user gave it, and opens the box on that name', async () => {
     await renderRail();
-    expect(byTestId(`pro-nav-session-${NAMED}`)?.textContent).toContain('期末复习课');
+    expect(
+      (await waitForTestId(`pro-nav-session-${NAMED}`, 'the rail must list the chat')).textContent,
+    ).toContain('期末复习课');
     expect((await openRename(NAMED)).value).toBe('期末复习课');
   });
 
