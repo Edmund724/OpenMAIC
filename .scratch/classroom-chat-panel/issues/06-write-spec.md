@@ -21,4 +21,7 @@ HITL：规格完成后需用户确认才算达成终点。
 
 ## Answer
 
-（待解）
+（待用户确认后才算达成终点）
+
+- 2026-09-22 规格初稿已产出：`reports/classroom-chat-panel-spec.md`——13 节：模块与接缝 / 新增模块（composer、历史浮层、`display-session.ts` 深模块、两个纯函数）/ `use-chat-sessions` 与 `chat-area`、`PlaybackChromeRoot`、`roundtable` 的改造点（带 file:line）/ 快捷键 / i18n 新键 / 跟随改与新增的测试 / 不做的事 / 验证方式 / 落地顺序。
+- 待确认时一并看的两处：规格里标注"原型没画过的两个画面"（输入区上方状态条、"有新内容 ↓"）尚未在原型里补看；全屏黑框宽度取了原型值 268px。

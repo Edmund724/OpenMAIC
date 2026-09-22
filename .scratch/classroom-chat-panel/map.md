@@ -14,7 +14,7 @@ Status: open
 - 领域：Next.js + React + Tailwind 的 AI 课堂（OpenMAIC fork）。学生看课件（左）、问 AI（右）。桌面场景。
 - **工作方式**：grilling 票开场调 Skill: grilling + domain-modeling；research 票调 Skill: research；原型票调 Skill: prototype。
 - **用户偏好**：中文；表达简洁；每行改动可溯源到请求。
-- **本 effort 携带执行**：P1 产出可点原型（假数据，不碰课堂逻辑），S1 产出规格。不写产品代码。
+- **本 effort 携带执行**：P1 产出可点原型（假数据，不碰课堂逻辑），S1 产出规格。不写产品代码。**规格已产出：`reports/classroom-chat-panel-spec.md`（待用户确认）。**
 - **已拍板的形状**（grilling 三轮的结论，细节见各票）：
   - 输入区**常驻**在对话 tab 底部；视觉只借参考图的布局，配色跟现有白/紫半透明圆角；面板宽度上限 560 → 640，最小 240 不动（输入区自适应折行）。
   - 语音**点按切换**；识别完**先落进输入框**让学生确认，不再自动发送。
