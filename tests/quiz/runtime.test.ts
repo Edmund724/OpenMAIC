@@ -48,10 +48,14 @@ describe('quiz attempt runtime persistence', () => {
       configurable: true,
       value: IDBKeyRange,
     });
+    // Node >= 24.5 ships a native navigator.locks, which would take the Web Locks
+    // branch instead of the fallback this suite covers.
+    vi.stubGlobal('navigator', {});
   });
 
   afterEach(() => {
     vi.useRealTimers();
+    vi.unstubAllGlobals();
   });
 
   it('coalesces rapid draft changes into one latest snapshot', async () => {

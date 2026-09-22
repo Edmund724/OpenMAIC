@@ -148,6 +148,10 @@ async function runtimeChatRecords(store: RuntimeStore): Promise<RuntimeRecord[]>
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // Node >= 24.5 ships a native navigator.locks, which would take the Web Locks
+  // branch instead of the fallback this suite covers. Tests that exercise the
+  // locked branch stub navigator themselves.
+  vi.stubGlobal('navigator', {});
 });
 
 afterEach(() => {
