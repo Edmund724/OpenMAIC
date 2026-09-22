@@ -9,15 +9,7 @@
  */
 
 import type { ReactNode } from 'react';
-import {
-  Download,
-  Maximize2,
-  MessageSquare,
-  Mic,
-  Monitor,
-  MonitorPlay,
-  Settings,
-} from 'lucide-react';
+import { Download, Maximize2, MessageSquare, Monitor, MonitorPlay, Settings } from 'lucide-react';
 import { AvatarDisplay } from '@/components/ui/avatar-display';
 import { COURSE } from './mock-data';
 
@@ -68,7 +60,7 @@ function SlideArea() {
   );
 }
 
-function RoundtableBar({ showStudentControls }: { readonly showStudentControls: boolean }) {
+function RoundtableBar() {
   return (
     <div className="h-[192px] w-full shrink-0 px-3 pb-3">
       <div className="flex h-full w-full flex-col rounded-2xl border border-gray-200/70 bg-white/70 backdrop-blur-xl">
@@ -98,31 +90,33 @@ function RoundtableBar({ showStudentControls }: { readonly showStudentControls: 
             </div>
           </div>
 
-          {/* 右栏：改造前是学生控件，改造后空出来 */}
-          <div className="flex w-[140px] shrink-0 flex-col items-center justify-center gap-2">
-            {showStudentControls ? (
-              <>
-                <div className="flex gap-1.5">
-                  <button className="flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-400 shadow-sm">
-                    <Mic className="h-3.5 w-3.5" />
-                  </button>
-                  <button className="flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-400 shadow-sm">
-                    <MessageSquare className="h-3.5 w-3.5" />
-                  </button>
+          {/* 右栏：上半截保留学生 agent 头像条（讨论邀请卡的锚点），下半截的学生控件撤走 */}
+          <div className="flex w-[140px] shrink-0 flex-col gap-2">
+            <div className="flex items-center justify-center gap-1.5 rounded-xl border border-gray-100 bg-white/70 px-1.5 py-1.5">
+              {[
+                { src: '/avatars/student1.svg', alt: '小林', speaking: true },
+                { src: '/avatars/student2.svg', alt: '小周', speaking: false },
+                { src: '/avatars/student3.svg', alt: '小陈', speaking: false },
+              ].map((student) => (
+                <div
+                  key={student.alt}
+                  className={
+                    student.speaking
+                      ? 'h-8 w-8 overflow-hidden rounded-full border-2 border-purple-400 bg-gray-50'
+                      : 'h-8 w-8 overflow-hidden rounded-full border-2 border-white bg-gray-50 opacity-70'
+                  }
+                >
+                  <AvatarDisplay src={student.src} alt={student.alt} />
                 </div>
-                <div className="h-14 w-14 overflow-hidden rounded-full border-2 border-white bg-gray-50 opacity-60">
-                  <AvatarDisplay src="/avatars/user.png" alt="我" />
-                </div>
-              </>
-            ) : (
-              <div className="flex h-full w-full items-center justify-center rounded-xl border border-dashed border-gray-300/80 px-2 text-center">
-                <span className="text-[9px] leading-tight text-gray-400">
-                  学生控件已撤走
-                  <br />
-                  （原型标注）
-                </span>
-              </div>
-            )}
+              ))}
+            </div>
+            <div className="flex min-h-0 flex-1 items-center justify-center rounded-xl border border-dashed border-gray-300/80 px-2 text-center">
+              <span className="text-[9px] leading-tight text-gray-400">
+                下半截已撤走
+                <br />
+                （麦克风 / 气泡按钮 / 大头像）
+              </span>
+            </div>
           </div>
         </div>
       </div>
@@ -131,11 +125,9 @@ function RoundtableBar({ showStudentControls }: { readonly showStudentControls: 
 }
 
 export function ClassroomFrame({
-  showStudentControls,
   panel,
   narrowPanel,
 }: {
-  readonly showStudentControls: boolean;
   readonly panel: ReactNode;
   readonly narrowPanel: boolean;
 }) {
@@ -144,7 +136,7 @@ export function ClassroomFrame({
       <div className="flex min-w-0 flex-1 flex-col">
         <TopBar />
         <SlideArea />
-        <RoundtableBar showStudentControls={showStudentControls} />
+        <RoundtableBar />
       </div>
       <div
         className="relative flex shrink-0 flex-col overflow-hidden border-l border-gray-100 bg-white/80 shadow-[-2px_0_24px_rgba(0,0,0,0.02)] backdrop-blur-xl"
@@ -196,14 +188,9 @@ export function FullscreenStage({ composer }: { readonly composer: ReactNode }) 
         </span>
         <div className="flex-1" />
         <div>{composer}</div>
-        <div className="flex items-center justify-center gap-2 pt-0.5">
-          <button className="flex h-7 w-7 items-center justify-center rounded-full text-white/70 hover:bg-white/10">
-            <Mic className="h-4 w-4" />
-          </button>
-          <button className="flex h-7 w-7 items-center justify-center rounded-full text-white/70 hover:bg-white/10">
-            <MessageSquare className="h-4 w-4" />
-          </button>
-        </div>
+        <span className="rounded-lg bg-white/5 px-2 py-1.5 text-[10px] leading-tight text-white/50">
+          麦克风 / 文字按钮 / 用户头像随输入条一起撤走（Q18：横条右栏只撤下半截）
+        </span>
       </div>
     </div>
   );
