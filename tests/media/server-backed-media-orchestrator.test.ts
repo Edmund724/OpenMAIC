@@ -290,6 +290,19 @@ describe('server-backed classic media orchestrator', () => {
     );
   }
 
+  /**
+   * Give a pass real event-loop turns, not just microtasks.
+   *
+   * A proxied image arrives as a `Blob` body, and reading one resolves on a
+   * macrotask — so `await Promise.resolve()` in a loop never carries a pass as
+   * far as its commit, however many times it is repeated.
+   */
+  async function drainEventLoop(turns = 50): Promise<void> {
+    for (let turn = 0; turn < turns; turn += 1) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+  }
+
   it('stores bytes, then the reference, then finishes the task', async () => {
     serveImage();
 
@@ -1374,10 +1387,11 @@ describe('server-backed classic media orchestrator', () => {
     });
 
     const first = generateMediaForOutlines(outlines, stageId);
-    // Give the second pass every chance to run: if it were not waiting, its
-    // collection loop is synchronous and element two is only `pending`, so it
-    // would have called the provider by now.
-    for (let tick = 0; tick < 50; tick += 1) await Promise.resolve();
+    // Let the first pass reach its commit — the second pass is launched from
+    // inside it — and then give that second pass every chance to run: if it were
+    // not waiting, its collection loop is synchronous and element two is only
+    // `pending`, so it would have called the provider by now.
+    await drainEventLoop();
     expect(providerCallCount()).toBe(callsWhenOverlappingStarted);
 
     releaseCommit?.();
@@ -1429,8 +1443,9 @@ describe('server-backed classic media orchestrator', () => {
 
     const first = new AbortController();
     const pass1 = generateMediaForOutlines(outlines, stageId, first.signal).catch(() => undefined);
-    await Promise.resolve();
-    await Promise.resolve();
+    // Park the first pass inside its first provider call before aborting it, so
+    // the handoff happens while that call is genuinely in flight.
+    await drainEventLoop();
 
     // Verbatim what the retry path does, in one synchronous block.
     first.abort();
