@@ -172,6 +172,26 @@ describe('Composer', () => {
     ).toBe(true);
   });
 
+  it('keeps the draft when the host vetoes the send, then sends once the veto lifts', async () => {
+    let allowed = false;
+    await mount({ canSubmit: () => allowed });
+
+    await press('Enter');
+    await act(async () => {
+      container
+        .querySelector('[data-testid="chat-composer-send"]')!
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(submitted).toEqual([]);
+    expect(input().value).toBe('draft');
+
+    allowed = true;
+    await press('Enter');
+
+    expect(submitted).toEqual(['draft']);
+  });
+
   it('shows the turn hint and the amber ring while it is the student’s turn', async () => {
     await mount({ isCueUser: true });
 

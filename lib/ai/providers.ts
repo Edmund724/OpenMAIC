@@ -24,6 +24,8 @@
  * - https://www.volcengine.com/docs/82379/1330310
  * - https://platform.xiaomimimo.com/static/docs/pricing.md
  * - https://platform.xiaomimimo.com/static/docs/tokenplan/quick-access.md
+ * - https://mimo.mi.com/static/docs/quick-start/summary/model.md
+ * - https://mimo.mi.com/static/docs/api/chat/openai-api.md
  */
 
 import { createOpenAI } from '@ai-sdk/openai';
@@ -55,6 +57,7 @@ import {
   pickThinkingEffort,
 } from './thinking-config';
 import { createLogger } from '@/lib/logger';
+import { withAppAttributionInit } from '@/lib/config/app-attribution';
 import { normalizeAzureBaseUrl } from './azure';
 // NOTE: Do NOT import thinking-context.ts here — it uses node:async_hooks
 // which is server-only, and this file is also used on the client via
@@ -1503,6 +1506,38 @@ export const PROVIDERS: Record<ProviderId, ProviderConfig> = {
     icon: '/logos/xiaomi.svg',
     models: [
       {
+        id: 'mimo-v2.6-pro',
+        name: 'MiMo V2.6 Pro',
+        contextWindow: 1048576,
+        outputWindow: 131072,
+        capabilities: {
+          streaming: true,
+          tools: true,
+          vision: true,
+          thinking: {
+            toggleable: true,
+            budgetAdjustable: false,
+            defaultEnabled: true,
+          },
+        },
+      },
+      {
+        id: 'mimo-v2.6-flash',
+        name: 'MiMo V2.6 Flash',
+        contextWindow: 1048576,
+        outputWindow: 131072,
+        capabilities: {
+          streaming: true,
+          tools: true,
+          vision: true,
+          thinking: {
+            toggleable: true,
+            budgetAdjustable: false,
+            defaultEnabled: true,
+          },
+        },
+      },
+      {
         id: 'mimo-v2.5-pro',
         name: 'MiMo V2.5 Pro',
         contextWindow: 1048576,
@@ -2288,6 +2323,9 @@ export function getModel(config: ModelConfig): ModelWithInfo {
   // See LLM_FETCH_TIMEOUT_MS: every outbound LLM request — whatever transport
   // it ends up on — carries the extended-timeout dispatcher.
   const transportFetch: typeof fetch = async (fetchInput, fetchInit) => {
+    // App attribution first: gateways that support it (TokenDance) receive
+    // X-App-URL on every outbound request; every other provider is untouched.
+    fetchInit = withAppAttributionInit(fetchInput, fetchInit);
     // A caller-supplied dispatcher (config.fetchImpl may carry one) wins over
     // ours; only inject ours when the request doesn't already carry one.
     if ((fetchInit as (RequestInit & { dispatcher?: unknown }) | undefined)?.dispatcher) {

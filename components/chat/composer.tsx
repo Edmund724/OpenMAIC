@@ -48,6 +48,12 @@ export interface ComposerProps {
   readonly isCueUser?: boolean;
   /** The engine is generating — sending is refused. */
   readonly disabled?: boolean;
+  /**
+   * Veto for a send that the host must refuse (e.g. the referenced element is
+   * gone). Returning false keeps the draft so the student can drop the receipt
+   * and send again.
+   */
+  readonly canSubmit?: () => boolean;
   /** The courseware-reference receipt, rendered above the box. */
   readonly elementReferencePill?: ReactNode;
 }
@@ -87,6 +93,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     onActivityChange,
     isCueUser = false,
     disabled = false,
+    canSubmit,
     elementReferencePill,
   },
   ref,
@@ -136,8 +143,9 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 
   const handleSend = useCallback(() => {
     if (disabled || isInUse || !value.trim()) return;
+    if (canSubmit?.() === false) return;
     onSubmit(value);
-  }, [disabled, isInUse, onSubmit, value]);
+  }, [canSubmit, disabled, isInUse, onSubmit, value]);
 
   const handleStartVoice = useCallback(() => {
     if (!asrAvailable || isProcessing) return;

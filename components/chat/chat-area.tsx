@@ -71,6 +71,8 @@ interface ChatAreaProps {
   onJumpToAction?: (sceneId: string, actionIndex: number) => void;
   /** The student's text, handed to the engine by the owner of `onMessageSend`. */
   onComposerSubmit?: (text: string) => void;
+  /** Veto for a send the engine side must refuse (stale element reference). */
+  canComposerSubmit?: () => boolean;
   /** Focus or first keystroke in the composer → level-1 pause. */
   onComposerInputActivate?: () => void;
   /** Typing or starting a recording → keep a soft-closing session alive. */
@@ -209,6 +211,7 @@ export const ChatArea = forwardRef<ChatAreaRef, ChatAreaProps>(
       canJumpToAction,
       onJumpToAction,
       onComposerSubmit,
+      canComposerSubmit,
       onComposerInputActivate,
       onComposerUserInputActivity,
       onComposerActivity,
@@ -585,6 +588,7 @@ export const ChatArea = forwardRef<ChatAreaRef, ChatAreaProps>(
                   onActivityChange={onComposerActivity}
                   isCueUser={isCueUser}
                   disabled={isStreaming}
+                  canSubmit={canComposerSubmit}
                   elementReferencePill={elementReferencePill}
                 />
               </div>
