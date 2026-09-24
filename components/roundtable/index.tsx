@@ -1326,7 +1326,6 @@ export function Roundtable({
                 })()}
             </AnimatePresence>
           </div>
-
         </div>
       </div>
       {/* close interaction row */}

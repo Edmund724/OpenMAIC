@@ -304,9 +304,10 @@ export const ChatArea = forwardRef<ChatAreaRef, ChatAreaProps>(
       [chatSessions, displaySessionId],
     );
 
-    const openLiveSession = useMemo(() => chatSessions.find(isOpenLiveSession) ?? null, [
-      chatSessions,
-    ]);
+    const openLiveSession = useMemo(
+      () => chatSessions.find(isOpenLiveSession) ?? null,
+      [chatSessions],
+    );
 
     const softClosingChatSession = useMemo(
       () => chatSessions.find((s) => s.status === 'soft-closing'),
@@ -359,28 +360,31 @@ export const ChatArea = forwardRef<ChatAreaRef, ChatAreaProps>(
       setActiveTab(tab);
     }, []);
 
-    const requestComposer = useCallback((action: 'focus' | 'blur' | 'toggle-voice' | 'stop-voice') => {
-      setActiveTab('chat');
-      if (action === 'stop-voice') {
-        composerRef.current?.stopVoice();
-        return;
-      }
-      if (action === 'blur') {
-        composerRef.current?.blur();
-        return;
-      }
-      const handle = composerRef.current;
-      if (action === 'focus' && handle) {
-        handle.focus();
-        return;
-      }
-      if (action === 'toggle-voice' && handle) {
-        if (handle.isRecording()) handle.stopVoice();
-        else handle.startVoice();
-        return;
-      }
-      pendingComposerActionRef.current = action;
-    }, []);
+    const requestComposer = useCallback(
+      (action: 'focus' | 'blur' | 'toggle-voice' | 'stop-voice') => {
+        setActiveTab('chat');
+        if (action === 'stop-voice') {
+          composerRef.current?.stopVoice();
+          return;
+        }
+        if (action === 'blur') {
+          composerRef.current?.blur();
+          return;
+        }
+        const handle = composerRef.current;
+        if (action === 'focus' && handle) {
+          handle.focus();
+          return;
+        }
+        if (action === 'toggle-voice' && handle) {
+          if (handle.isRecording()) handle.stopVoice();
+          else handle.startVoice();
+          return;
+        }
+        pendingComposerActionRef.current = action;
+      },
+      [],
+    );
 
     const draftKey = displaySessionId ?? '';
 
@@ -571,7 +575,9 @@ export const ChatArea = forwardRef<ChatAreaRef, ChatAreaProps>(
                       ? () => continueSoftClosingSession(openLiveSession.id)
                       : undefined
                   }
-                  onBack={openLiveSession ? () => setDisplaySessionId(openLiveSession.id) : undefined}
+                  onBack={
+                    openLiveSession ? () => setDisplaySessionId(openLiveSession.id) : undefined
+                  }
                 />
                 <Composer
                   ref={attachComposer}
